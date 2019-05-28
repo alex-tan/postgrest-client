@@ -1,5 +1,18 @@
 module Postgrest exposing
-    ( Param, Params, Selectable, ColumnOrder, Value
+    ( Endpoint
+    , Request
+    , endpoint
+    , getByPrimaryKey
+    , getMany
+    , postOne
+    , patchByPrimaryKey
+    , unsafePatch
+    , deleteByPrimaryKey
+    , setParams
+    , JWT, jwt, toCmd, toTask
+    , table, prefixedTable, customURL
+    , Error(..), toHttpError
+    , Param, Params, Selectable, ColumnOrder, Value
     , Operator
     , select
     , allAttributes
@@ -42,10 +55,39 @@ module Postgrest exposing
     , plfts
     , phfts
     , fts
-    , Endpoint, Error(..), JWT, Request, customURL, deleteByPrimaryKey, endpoint, expectJson, expectWhatever, getMany, getOne, jsonResolver, jwt, patchByPrimaryKey, postOne, prefixedTable, resolution, setParams, table, toCmd, toHttpError, toTask, unsafePatch
+    , primaryKey, primaryKey2, primaryKey3
     )
 
 {-|
+
+
+# Request Construction and Modification
+
+@docs Endpoint
+@docs Request
+@docs endpoint
+@docs getByPrimaryKey
+@docs getMany
+@docs postOne
+@docs patchByPrimaryKey
+@docs unsafePatch
+@docs deleteByPrimaryKey
+@docs setParams
+
+
+# Request Authentication and Execution
+
+@docs JWT, jwt, toCmd, toTask
+
+
+# URL Construction
+
+@docs table, prefixedTable, customURL
+
+
+# Errors
+
+@docs Error, toHttpError
 
 
 # Types
@@ -937,10 +979,6 @@ toQueryString =
         >> String.join "&"
 
 
-type alias PrimaryKeyConverter primaryKey =
-    ( String, primaryKey -> Value )
-
-
 type JWT
     = JWT String
 
@@ -951,24 +989,18 @@ jwt =
 
 
 type Request r
-    = Request
-        { options : RequestType r
-        , timeout : Maybe Float
-        , defaultParams : Params
-        , overrideParams : Params
-        , mandatoryParams : Params
-        , baseURL : String
-        }
+    = Request (RequestOptions r)
+    | InvalidRequest
 
 
-timeout : Request r -> Maybe Float
-timeout (Request r) =
-    r.timeout
-
-
-options : Request r -> RequestType r
-options (Request r) =
-    r.options
+type alias RequestOptions r =
+    { options : RequestType r
+    , timeout : Maybe Float
+    , defaultParams : Params
+    , overrideParams : Params
+    , mandatoryParams : Params
+    , baseURL : String
+    }
 
 
 defaultRequest : Endpoint p r -> RequestType returning -> Request returning
@@ -984,17 +1016,27 @@ defaultRequest e requestType =
 
 
 setParams : Params -> Request r -> Request r
-setParams p (Request req) =
-    Request { req | overrideParams = p }
+setParams p =
+    mapRequest (\req -> { req | overrideParams = p })
 
 
 setMandatoryParams : Params -> Request r -> Request r
-setMandatoryParams p (Request req) =
-    Request { req | mandatoryParams = p }
+setMandatoryParams p =
+    mapRequest (\req -> { req | mandatoryParams = p })
 
 
-url : Request r -> String
-url (Request { defaultParams, overrideParams, mandatoryParams, baseURL }) =
+mapRequest : (RequestOptions r -> RequestOptions r) -> Request r -> Request r
+mapRequest f req =
+    case req of
+        Request options ->
+            Request (f options)
+
+        InvalidRequest ->
+            InvalidRequest
+
+
+url : RequestOptions r -> String
+url { defaultParams, overrideParams, mandatoryParams, baseURL } =
     let
         params =
             concatParams [ defaultParams, overrideParams, mandatoryParams ]
@@ -1009,45 +1051,71 @@ type RequestType r
     | Delete r
 
 
-getOne : Endpoint p r -> p -> Request r
-getOne e primaryKey =
-    defaultRequest e (Get <| index 0 e.decoder)
-        |> setMandatoryParams [ primaryKeyEqClause e.primaryKeyToParams primaryKey ]
-
-
 getMany : Endpoint p r -> Request (List r)
 getMany e =
     defaultRequest e <| Get <| JD.list e.decoder
 
 
-primaryKeyEqClause : List (PrimaryKeyConverter primaryKey) -> primaryKey -> Param
-primaryKeyEqClause definition pk =
+primaryKeyEqClause : PrimaryKeyConverter primaryKey -> primaryKey -> Params
+primaryKeyEqClause converter pk =
     let
-        base =
-            definition
-                |> List.map
-                    (\( key, toParam ) ->
-                        param key <| eq <| toParam pk
-                    )
-    in
-    case base of
-        x :: [] ->
-            x
+        pkPartToParam ( key, toParam ) =
+            param key <| eq <| toParam pk
 
-        _ ->
-            and base
+        targetCondition =
+            case converter of
+                PrimaryKeyConverter a ->
+                    pkPartToParam a
+
+                PrimaryKeyConverter2 a b ->
+                    and
+                        [ pkPartToParam a
+                        , pkPartToParam b
+                        ]
+
+                PrimaryKeyConverter3 a b c ->
+                    and
+                        [ pkPartToParam a
+                        , pkPartToParam b
+                        , pkPartToParam c
+                        ]
+    in
+    [ targetCondition
+    , limit 1
+    ]
+
+
+getByPrimaryKey : Endpoint p r -> p -> Request r
+getByPrimaryKey e primaryKey_ =
+    case e.primaryKeyToParams of
+        Just primaryKeyToParams_ ->
+            defaultRequest e (Get <| index 0 e.decoder)
+                |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
+
+        Nothing ->
+            InvalidRequest
 
 
 patchByPrimaryKey : Endpoint pk record -> pk -> JE.Value -> Request record
-patchByPrimaryKey e primaryKey body =
-    defaultRequest e (Patch body <| index 0 e.decoder)
-        |> setMandatoryParams [ primaryKeyEqClause e.primaryKeyToParams primaryKey ]
+patchByPrimaryKey e primaryKey_ body =
+    case e.primaryKeyToParams of
+        Just primaryKeyToParams_ ->
+            defaultRequest e (Patch body <| index 0 e.decoder)
+                |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
+
+        Nothing ->
+            InvalidRequest
 
 
 deleteByPrimaryKey : Endpoint p r -> p -> Request p
-deleteByPrimaryKey e primaryKey =
-    defaultRequest e (Delete primaryKey)
-        |> setMandatoryParams [ primaryKeyEqClause e.primaryKeyToParams primaryKey ]
+deleteByPrimaryKey e primaryKey_ =
+    case e.primaryKeyToParams of
+        Just primaryKeyToParams_ ->
+            defaultRequest e (Delete primaryKey_)
+                |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
+
+        Nothing ->
+            InvalidRequest
 
 
 postOne : Endpoint p r -> JE.Value -> Request r
@@ -1062,108 +1130,118 @@ unsafePatch e body =
 
 toCmd : JWT -> (Result Error r -> msg) -> Request r -> Cmd msg
 toCmd jwt_ toMsg request =
-    let
-        timeout_ =
-            timeout request
+    case request of
+        Request options ->
+            let
+                timeout_ =
+                    options.timeout
 
-        url_ =
-            url request
-    in
-    case options request of
-        Post body decoder ->
-            Http.request
-                { method = "POST"
-                , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
-                , url = url_
-                , body = Http.jsonBody body
-                , expect = expectJson toMsg decoder
-                , timeout = timeout_
-                , tracker = Nothing
-                }
+                url_ =
+                    url options
+            in
+            case options.options of
+                Post body decoder ->
+                    Http.request
+                        { method = "POST"
+                        , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
+                        , url = url_
+                        , body = Http.jsonBody body
+                        , expect = expectJson toMsg decoder
+                        , timeout = timeout_
+                        , tracker = Nothing
+                        }
 
-        Get decoder ->
-            Http.request
-                { method = "GET"
-                , headers = [ jwtHeader jwt_ ]
-                , url = url_
-                , body = Http.emptyBody
-                , expect = expectJson toMsg decoder
-                , timeout = timeout_
-                , tracker = Nothing
-                }
+                Get decoder ->
+                    Http.request
+                        { method = "GET"
+                        , headers = [ jwtHeader jwt_ ]
+                        , url = url_
+                        , body = Http.emptyBody
+                        , expect = expectJson toMsg decoder
+                        , timeout = timeout_
+                        , tracker = Nothing
+                        }
 
-        Patch body decoder ->
-            Http.request
-                { method = "PATCH"
-                , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
-                , url = url_
-                , body = Http.jsonBody body
-                , expect = expectJson toMsg decoder
-                , timeout = timeout_
-                , tracker = Nothing
-                }
+                Patch body decoder ->
+                    Http.request
+                        { method = "PATCH"
+                        , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
+                        , url = url_
+                        , body = Http.jsonBody body
+                        , expect = expectJson toMsg decoder
+                        , timeout = timeout_
+                        , tracker = Nothing
+                        }
 
-        Delete returning ->
-            Http.request
-                { method = "DELETE"
-                , headers = [ jwtHeader jwt_ ]
-                , url = url_
-                , body = Http.emptyBody
-                , expect = expectWhatever (toMsg << Result.map (always returning))
-                , timeout = timeout_
-                , tracker = Nothing
-                }
+                Delete returning ->
+                    Http.request
+                        { method = "DELETE"
+                        , headers = [ jwtHeader jwt_ ]
+                        , url = url_
+                        , body = Http.emptyBody
+                        , expect = expectWhatever (toMsg << Result.map (always returning))
+                        , timeout = timeout_
+                        , tracker = Nothing
+                        }
+
+        InvalidRequest ->
+            Cmd.none
 
 
 toTask : JWT -> Request r -> Task Error r
 toTask jwt_ request =
-    let
-        timeout_ =
-            timeout request
+    case request of
+        Request options ->
+            let
+                timeout_ =
+                    options.timeout
 
-        url_ =
-            url request
-    in
-    case options request of
-        Post body decoder ->
-            task
-                { method = "POST"
-                , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
-                , url = url_
-                , body = Http.jsonBody body
-                , resolver = jsonResolver decoder
-                , timeout = timeout_
-                }
+                url_ =
+                    url options
+            in
+            case options.options of
+                Post body decoder ->
+                    task
+                        { method = "POST"
+                        , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
+                        , url = url_
+                        , body = Http.jsonBody body
+                        , resolver = jsonResolver decoder
+                        , timeout = timeout_
+                        }
 
-        Get decoder ->
-            task
-                { method = "GET"
-                , headers = [ jwtHeader jwt_ ]
-                , url = url_
-                , body = Http.emptyBody
-                , resolver = jsonResolver decoder
-                , timeout = timeout_
-                }
+                Get decoder ->
+                    task
+                        { method = "GET"
+                        , headers = [ jwtHeader jwt_ ]
+                        , url = url_
+                        , body = Http.emptyBody
+                        , resolver = jsonResolver decoder
+                        , timeout = timeout_
+                        }
 
-        Patch body decoder ->
-            task
-                { method = "PATCH"
-                , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
-                , url = url_
-                , body = Http.jsonBody body
-                , resolver = jsonResolver decoder
-                , timeout = timeout_
-                }
+                Patch body decoder ->
+                    task
+                        { method = "PATCH"
+                        , headers = [ jwtHeader jwt_, returnRepresentationHeader ]
+                        , url = url_
+                        , body = Http.jsonBody body
+                        , resolver = jsonResolver decoder
+                        , timeout = timeout_
+                        }
 
-        Delete returning ->
-            task
-                { method = "DELETE"
-                , headers = [ jwtHeader jwt_ ]
-                , url = url_
-                , body = Http.emptyBody
-                , resolver = Http.stringResolver <| always <| Ok returning
-                , timeout = timeout_
-                }
+                Delete returning ->
+                    task
+                        { method = "DELETE"
+                        , headers = [ jwtHeader jwt_ ]
+                        , url = url_
+                        , body = Http.emptyBody
+                        , resolver = Http.stringResolver <| always <| Ok returning
+                        , timeout = timeout_
+                        }
+
+        InvalidRequest ->
+            Task.fail UnspecifiedPrimaryKeyToParams
 
 
 returnRepresentationHeader : Http.Header
@@ -1236,12 +1314,37 @@ expectWhatever toMsg =
 
 type alias Endpoint primaryKey record =
     { url : URL
-    , primaryKeyToParams : List ( String, primaryKey -> Value )
+    , primaryKeyToParams : Maybe (PrimaryKeyConverter primaryKey)
     , decoder : Decoder record
     , defaultSelect : Maybe (List Selectable)
     , defaultOrder : Maybe (List ColumnOrder)
     , defaultLimit : Maybe Int
     }
+
+
+type alias PKPart pk =
+    ( String, pk -> Value )
+
+
+type PrimaryKeyConverter pk
+    = PrimaryKeyConverter (PKPart pk)
+    | PrimaryKeyConverter2 (PKPart pk) (PKPart pk)
+    | PrimaryKeyConverter3 (PKPart pk) (PKPart pk) (PKPart pk)
+
+
+primaryKey : PKPart pk -> PrimaryKeyConverter pk
+primaryKey a =
+    PrimaryKeyConverter a
+
+
+primaryKey2 : PKPart pk -> PKPart pk -> PrimaryKeyConverter pk
+primaryKey2 a b =
+    PrimaryKeyConverter2 a b
+
+
+primaryKey3 : PKPart pk -> PKPart pk -> PKPart pk -> PrimaryKeyConverter pk
+primaryKey3 a b c =
+    PrimaryKeyConverter3 a b c
 
 
 endpoint : Endpoint pk r -> Endpoint pk r
@@ -1324,6 +1427,7 @@ type Error
     | NetworkError
     | BadStatus Int PostgrestErrorJSON
     | BadBody String
+    | UnspecifiedPrimaryKeyToParams
 
 
 toHttpError : Error -> Http.Error
@@ -1343,6 +1447,9 @@ toHttpError e =
 
         BadBody s ->
             Http.BadBody s
+
+        UnspecifiedPrimaryKeyToParams ->
+            Http.BadUrl "unspecified_primary_key_to_params"
 
 
 badStatusBodyToPostgrestError : Int -> String -> Error
