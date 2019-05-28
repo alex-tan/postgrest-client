@@ -1,0 +1,3 @@
+#!/bin/bash
+
+rm -rf elm-stuff; elm make; chokidar 'src/**/*.elm' -c 'elm make'
