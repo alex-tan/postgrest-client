@@ -2,21 +2,28 @@ module Postgrest exposing
     ( Endpoint
     , Request
     , endpoint
-    , getByPrimaryKey
     , getMany
     , postOne
+    , getByPrimaryKey
     , patchByPrimaryKey
-    , unsafePatch
     , deleteByPrimaryKey
     , setParams
-    , JWT, jwt, toCmd, toTask
+    , get
+    , post
+    , unsafePatch
+    , JWT, jwt, jwtString
+    , toCmd, toTask
     , PrimaryKey
     , primaryKey
     , primaryKey2
     , primaryKey3
     , table, prefixedTable, customURL
     , Error(..), toHttpError
-    , Param, Params, Selectable, ColumnOrder, Value
+    , Param
+    , Params
+    , Selectable
+    , ColumnOrder
+    , Value
     , Operator
     , select
     , allAttributes
@@ -59,7 +66,7 @@ module Postgrest exposing
     , plfts
     , phfts
     , fts
-    , URL, get, jwtString, post
+    , URL
     )
 
 {-|
@@ -70,18 +77,30 @@ module Postgrest exposing
 @docs Endpoint
 @docs Request
 @docs endpoint
-@docs getByPrimaryKey
 @docs getMany
 @docs postOne
+@docs getByPrimaryKey
 @docs patchByPrimaryKey
-@docs unsafePatch
 @docs deleteByPrimaryKey
 @docs setParams
 
 
-# Request Authentication and Execution
+# Generic Requests
 
-@docs JWT, jwt, toCmd, toTask
+@docs get
+@docs post
+@docs unsafePatch
+@docs unsafeDelete
+
+
+# Request Authentication
+
+@docs JWT, jwt, jwtString
+
+
+# Execution
+
+@docs toCmd, toTask
 
 
 # Primary Keys
@@ -102,13 +121,17 @@ module Postgrest exposing
 @docs Error, toHttpError
 
 
-# Types
+# URL Parameter Construction
 
-@docs Param, Params, Selectable, ColumnOrder, Value
+@docs Param
+@docs Params
+@docs Selectable
+@docs ColumnOrder
+@docs Value
 @docs Operator
 
 
-# Select
+## Select
 
 @docs select
 @docs allAttributes
@@ -118,7 +141,7 @@ module Postgrest exposing
 @docs resourceWithParams
 
 
-# Converting/combining into something usable
+## Converting/combining into something usable
 
 @docs combineParams
 @docs concatParams
@@ -126,7 +149,7 @@ module Postgrest exposing
 @docs toQueryString
 
 
-# Param
+## Param
 
 @docs param
 @docs or
@@ -134,7 +157,7 @@ module Postgrest exposing
 @docs nestedParam
 
 
-# Operators
+## Operators
 
 @docs eq
 @docs gt
@@ -154,14 +177,14 @@ module Postgrest exposing
 @docs like
 
 
-# Values
+## Values
 
 @docs string
 @docs int
 @docs list
 
 
-# Order
+## Order
 
 @docs order
 @docs asc
@@ -170,7 +193,7 @@ module Postgrest exposing
 @docs nullslast
 
 
-# Full-Text Search
+## Full-Text Search
 
 @docs plfts
 @docs phfts
@@ -1027,7 +1050,7 @@ defaultRequest e requestType =
         , defaultParams = endpointToDefaultParams e
         , overrideParams = []
         , mandatoryParams = []
-        , baseURL = urlToString e.url
+        , baseURL = urlToString <| endpointURL e
         }
 
 
@@ -1066,7 +1089,9 @@ type RequestType r
 
 getMany : Endpoint r -> Request (List r)
 getMany e =
-    defaultRequest e <| Get <| JD.list e.decoder
+    case e of
+        Endpoint { decoder } ->
+            defaultRequest e <| Get <| JD.list decoder
 
 
 type alias GetOptions a =
@@ -1125,6 +1150,24 @@ unsafePatch url_ { body, decoder, params } =
         }
 
 
+type alias UnsafeDeleteOptions a =
+    { params : Params
+    , returning : a
+    }
+
+
+unsafeDelete : URL -> UnsafeDeleteOptions a -> Request a
+unsafeDelete url_ { returning, params } =
+    Request
+        { options = Delete returning
+        , timeout = Nothing
+        , defaultParams = []
+        , overrideParams = params
+        , mandatoryParams = []
+        , baseURL = urlToString url_
+        }
+
+
 primaryKeyEqClause : PrimaryKey primaryKey -> primaryKey -> Params
 primaryKeyEqClause converter pk =
     let
@@ -1148,14 +1191,24 @@ primaryKeyEqClause converter pk =
 
 getByPrimaryKey : Endpoint r -> PrimaryKey p -> p -> Request r
 getByPrimaryKey e primaryKeyToParams_ primaryKey_ =
-    defaultRequest e (Get <| index 0 e.decoder)
+    defaultRequest e (Get <| index 0 <| endpointDecoder e)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
 
 
 patchByPrimaryKey : Endpoint record -> PrimaryKey pk -> pk -> JE.Value -> Request record
 patchByPrimaryKey e primaryKeyToParams primaryKey_ body =
-    defaultRequest e (Patch body <| index 0 e.decoder)
+    defaultRequest e (Patch body <| index 0 <| endpointDecoder e)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
+
+
+endpointDecoder : Endpoint r -> Decoder r
+endpointDecoder (Endpoint { decoder }) =
+    decoder
+
+
+endpointURL : Endpoint r -> URL
+endpointURL (Endpoint o) =
+    o.url
 
 
 deleteByPrimaryKey : Endpoint r -> PrimaryKey p -> p -> Request p
@@ -1166,7 +1219,9 @@ deleteByPrimaryKey e primaryKeyToParams primaryKey_ =
 
 postOne : Endpoint r -> JE.Value -> Request r
 postOne e body =
-    defaultRequest e <| Post body <| index 0 e.decoder
+    case e of
+        Endpoint { decoder } ->
+            defaultRequest e <| Post body <| index 0 decoder
 
 
 toCmd : JWT -> (Result Error r -> msg) -> Request r -> Cmd msg
@@ -1347,13 +1402,17 @@ expectWhatever toMsg =
     Http.expectStringResponse toMsg (resolve (always <| Ok ()))
 
 
-type alias Endpoint record =
+type alias EndpointOptions record =
     { url : URL
     , decoder : Decoder record
     , defaultSelect : Maybe (List Selectable)
     , defaultOrder : Maybe (List ColumnOrder)
     , defaultLimit : Maybe Int
     }
+
+
+type Endpoint record
+    = Endpoint (EndpointOptions record)
 
 
 type alias PKPart pk =
@@ -1379,13 +1438,13 @@ primaryKey3 a b c =
     PrimaryKey [ a, b, c ]
 
 
-endpoint : Endpoint r -> Endpoint r
+endpoint : EndpointOptions r -> Endpoint r
 endpoint =
-    identity
+    Endpoint
 
 
 endpointToDefaultParams : Endpoint r -> Params
-endpointToDefaultParams { defaultSelect, defaultOrder, defaultLimit } =
+endpointToDefaultParams (Endpoint { defaultSelect, defaultOrder, defaultLimit }) =
     [ defaultSelect |> Maybe.map select
     , defaultOrder |> Maybe.map order
     , defaultLimit |> Maybe.map limit
