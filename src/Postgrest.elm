@@ -10,6 +10,10 @@ module Postgrest exposing
     , deleteByPrimaryKey
     , setParams
     , JWT, jwt, toCmd, toTask
+    , PrimaryKey
+    , primaryKey
+    , primaryKey2
+    , primaryKey3
     , table, prefixedTable, customURL
     , Error(..), toHttpError
     , Param, Params, Selectable, ColumnOrder, Value
@@ -55,7 +59,7 @@ module Postgrest exposing
     , plfts
     , phfts
     , fts
-    , primaryKey, primaryKey2, primaryKey3
+    , URL, get, jwtString, post
     )
 
 {-|
@@ -78,6 +82,14 @@ module Postgrest exposing
 # Request Authentication and Execution
 
 @docs JWT, jwt, toCmd, toTask
+
+
+# Primary Keys
+
+@docs PrimaryKey
+@docs primaryKey
+@docs primaryKey2
+@docs primaryKey3
 
 
 # URL Construction
@@ -988,9 +1000,13 @@ jwt =
     JWT
 
 
+jwtString : JWT -> String
+jwtString (JWT s) =
+    s
+
+
 type Request r
     = Request (RequestOptions r)
-    | InvalidRequest
 
 
 type alias RequestOptions r =
@@ -1003,7 +1019,7 @@ type alias RequestOptions r =
     }
 
 
-defaultRequest : Endpoint p r -> RequestType returning -> Request returning
+defaultRequest : Endpoint r -> RequestType returning -> Request returning
 defaultRequest e requestType =
     Request
         { options = requestType
@@ -1011,7 +1027,7 @@ defaultRequest e requestType =
         , defaultParams = endpointToDefaultParams e
         , overrideParams = []
         , mandatoryParams = []
-        , baseURL = endpointToBaseURL e
+        , baseURL = urlToString e.url
         }
 
 
@@ -1026,13 +1042,8 @@ setMandatoryParams p =
 
 
 mapRequest : (RequestOptions r -> RequestOptions r) -> Request r -> Request r
-mapRequest f req =
-    case req of
-        Request options ->
-            Request (f options)
-
-        InvalidRequest ->
-            InvalidRequest
+mapRequest f (Request options) =
+    Request (f options)
 
 
 url : RequestOptions r -> String
@@ -1041,7 +1052,9 @@ url { defaultParams, overrideParams, mandatoryParams, baseURL } =
         params =
             concatParams [ defaultParams, overrideParams, mandatoryParams ]
     in
-    baseURL ++ "?" ++ toQueryString params
+    [ baseURL, toQueryString params ]
+        |> List.filter (String.isEmpty >> Basics.not)
+        |> String.join "?"
 
 
 type RequestType r
@@ -1051,12 +1064,68 @@ type RequestType r
     | Delete r
 
 
-getMany : Endpoint p r -> Request (List r)
+getMany : Endpoint r -> Request (List r)
 getMany e =
     defaultRequest e <| Get <| JD.list e.decoder
 
 
-primaryKeyEqClause : PrimaryKeyConverter primaryKey -> primaryKey -> Params
+type alias GetOptions a =
+    { params : Params
+    , decoder : Decoder a
+    }
+
+
+get : URL -> GetOptions a -> Request a
+get url_ { params, decoder } =
+    Request
+        { options = Get decoder
+        , timeout = Nothing
+        , defaultParams = []
+        , overrideParams = params
+        , mandatoryParams = []
+        , baseURL = urlToString url_
+        }
+
+
+type alias PostOptions a =
+    { params : Params
+    , decoder : Decoder a
+    , body : JE.Value
+    }
+
+
+post : URL -> PostOptions a -> Request a
+post url_ { params, decoder, body } =
+    Request
+        { options = Post body decoder
+        , timeout = Nothing
+        , defaultParams = []
+        , overrideParams = params
+        , mandatoryParams = []
+        , baseURL = urlToString url_
+        }
+
+
+type alias UnsafePatchOptions a =
+    { body : JE.Value
+    , decoder : Decoder a
+    , params : Params
+    }
+
+
+unsafePatch : URL -> UnsafePatchOptions a -> Request a
+unsafePatch url_ { body, decoder, params } =
+    Request
+        { options = Patch body decoder
+        , timeout = Nothing
+        , defaultParams = []
+        , overrideParams = params
+        , mandatoryParams = []
+        , baseURL = urlToString url_
+        }
+
+
+primaryKeyEqClause : PrimaryKey primaryKey -> primaryKey -> Params
 primaryKeyEqClause converter pk =
     let
         pkPartToParam ( key, toParam ) =
@@ -1064,68 +1133,40 @@ primaryKeyEqClause converter pk =
 
         targetCondition =
             case converter of
-                PrimaryKeyConverter a ->
+                PrimaryKey [ a ] ->
                     pkPartToParam a
 
-                PrimaryKeyConverter2 a b ->
-                    and
-                        [ pkPartToParam a
-                        , pkPartToParam b
-                        ]
-
-                PrimaryKeyConverter3 a b c ->
-                    and
-                        [ pkPartToParam a
-                        , pkPartToParam b
-                        , pkPartToParam c
-                        ]
+                PrimaryKey xs ->
+                    xs
+                        |> List.map pkPartToParam
+                        |> and
     in
     [ targetCondition
     , limit 1
     ]
 
 
-getByPrimaryKey : Endpoint p r -> p -> Request r
-getByPrimaryKey e primaryKey_ =
-    case e.primaryKeyToParams of
-        Just primaryKeyToParams_ ->
-            defaultRequest e (Get <| index 0 e.decoder)
-                |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
-
-        Nothing ->
-            InvalidRequest
+getByPrimaryKey : Endpoint r -> PrimaryKey p -> p -> Request r
+getByPrimaryKey e primaryKeyToParams_ primaryKey_ =
+    defaultRequest e (Get <| index 0 e.decoder)
+        |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
 
 
-patchByPrimaryKey : Endpoint pk record -> pk -> JE.Value -> Request record
-patchByPrimaryKey e primaryKey_ body =
-    case e.primaryKeyToParams of
-        Just primaryKeyToParams_ ->
-            defaultRequest e (Patch body <| index 0 e.decoder)
-                |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
-
-        Nothing ->
-            InvalidRequest
+patchByPrimaryKey : Endpoint record -> PrimaryKey pk -> pk -> JE.Value -> Request record
+patchByPrimaryKey e primaryKeyToParams primaryKey_ body =
+    defaultRequest e (Patch body <| index 0 e.decoder)
+        |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
 
 
-deleteByPrimaryKey : Endpoint p r -> p -> Request p
-deleteByPrimaryKey e primaryKey_ =
-    case e.primaryKeyToParams of
-        Just primaryKeyToParams_ ->
-            defaultRequest e (Delete primaryKey_)
-                |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
-
-        Nothing ->
-            InvalidRequest
+deleteByPrimaryKey : Endpoint r -> PrimaryKey p -> p -> Request p
+deleteByPrimaryKey e primaryKeyToParams primaryKey_ =
+    defaultRequest e (Delete primaryKey_)
+        |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
 
 
-postOne : Endpoint p r -> JE.Value -> Request r
+postOne : Endpoint r -> JE.Value -> Request r
 postOne e body =
     defaultRequest e <| Post body <| index 0 e.decoder
-
-
-unsafePatch : Endpoint p r -> JE.Value -> Request (List r)
-unsafePatch e body =
-    defaultRequest e <| Patch body <| JD.list e.decoder
 
 
 toCmd : JWT -> (Result Error r -> msg) -> Request r -> Cmd msg
@@ -1184,9 +1225,6 @@ toCmd jwt_ toMsg request =
                         , tracker = Nothing
                         }
 
-        InvalidRequest ->
-            Cmd.none
-
 
 toTask : JWT -> Request r -> Task Error r
 toTask jwt_ request =
@@ -1239,9 +1277,6 @@ toTask jwt_ request =
                         , resolver = Http.stringResolver <| always <| Ok returning
                         , timeout = timeout_
                         }
-
-        InvalidRequest ->
-            Task.fail UnspecifiedPrimaryKeyToParams
 
 
 returnRepresentationHeader : Http.Header
@@ -1312,9 +1347,8 @@ expectWhatever toMsg =
     Http.expectStringResponse toMsg (resolve (always <| Ok ()))
 
 
-type alias Endpoint primaryKey record =
+type alias Endpoint record =
     { url : URL
-    , primaryKeyToParams : Maybe (PrimaryKeyConverter primaryKey)
     , decoder : Decoder record
     , defaultSelect : Maybe (List Selectable)
     , defaultOrder : Maybe (List ColumnOrder)
@@ -1326,33 +1360,31 @@ type alias PKPart pk =
     ( String, pk -> Value )
 
 
-type PrimaryKeyConverter pk
-    = PrimaryKeyConverter (PKPart pk)
-    | PrimaryKeyConverter2 (PKPart pk) (PKPart pk)
-    | PrimaryKeyConverter3 (PKPart pk) (PKPart pk) (PKPart pk)
+type PrimaryKey pk
+    = PrimaryKey (List (PKPart pk))
 
 
-primaryKey : PKPart pk -> PrimaryKeyConverter pk
+primaryKey : PKPart pk -> PrimaryKey pk
 primaryKey a =
-    PrimaryKeyConverter a
+    PrimaryKey [ a ]
 
 
-primaryKey2 : PKPart pk -> PKPart pk -> PrimaryKeyConverter pk
+primaryKey2 : PKPart pk -> PKPart pk -> PrimaryKey pk
 primaryKey2 a b =
-    PrimaryKeyConverter2 a b
+    PrimaryKey [ a, b ]
 
 
-primaryKey3 : PKPart pk -> PKPart pk -> PKPart pk -> PrimaryKeyConverter pk
+primaryKey3 : PKPart pk -> PKPart pk -> PKPart pk -> PrimaryKey pk
 primaryKey3 a b c =
-    PrimaryKeyConverter3 a b c
+    PrimaryKey [ a, b, c ]
 
 
-endpoint : Endpoint pk r -> Endpoint pk r
+endpoint : Endpoint r -> Endpoint r
 endpoint =
     identity
 
 
-endpointToDefaultParams : Endpoint p r -> Params
+endpointToDefaultParams : Endpoint r -> Params
 endpointToDefaultParams { defaultSelect, defaultOrder, defaultLimit } =
     [ defaultSelect |> Maybe.map select
     , defaultOrder |> Maybe.map order
@@ -1382,17 +1414,17 @@ customURL =
     URL
 
 
-endpointToBaseURL : Endpoint primaryKey record -> String
-endpointToBaseURL e =
-    case e.url of
+urlToString : URL -> String
+urlToString u =
+    case u of
         Table tableName ->
             "/" ++ tableName
 
         PrefixedTable prefix tableName ->
             prefix ++ "/" ++ tableName
 
-        URL u ->
-            u
+        URL u_ ->
+            u_
 
 
 type alias PostgrestErrorJSON =
@@ -1427,7 +1459,6 @@ type Error
     | NetworkError
     | BadStatus Int PostgrestErrorJSON
     | BadBody String
-    | UnspecifiedPrimaryKeyToParams
 
 
 toHttpError : Error -> Http.Error
@@ -1447,9 +1478,6 @@ toHttpError e =
 
         BadBody s ->
             Http.BadBody s
-
-        UnspecifiedPrimaryKeyToParams ->
-            Http.BadUrl "unspecified_primary_key_to_params"
 
 
 badStatusBodyToPostgrestError : Int -> String -> Error
