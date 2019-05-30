@@ -1,7 +1,7 @@
 module PostgrestTests exposing (suite)
 
 import Expect exposing (Expectation)
-import Postgrest as P exposing (..)
+import Postgrest.Client as P exposing (..)
 import Test exposing (..)
 
 

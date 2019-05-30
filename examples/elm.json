@@ -6,7 +6,7 @@
     "elm-version": "0.19.0",
     "dependencies": {
         "direct": {
-            "alex-tan/postgrest-queries": "7.0.2",
+            "alex-tan/postgrest-client": "1.0.0",
             "elm/browser": "1.0.1",
             "elm/core": "1.0.2",
             "elm/html": "1.0.0"

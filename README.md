@@ -1,30 +1,30 @@
 # alex-tan/postgrest-client
 
-[![Build Status](https://travis-ci.org/alex-tan/postgrest-client.svg?branch=master)](https://travis-ci.org/alex-tan/postgrest-queries)
+[![Build Status](https://travis-ci.org/alex-tan/postgrest-client.svg?branch=master)](https://travis-ci.org/alex-tan/postgrest-client)
 
 This package allows you to both easily construct [Postgrest query strings](http://postgrest.org/en/v5.1/api.html#horizontal-filtering-rows) and also make postgrest requests using Elm.
 
 Most query operators are currently supported:
 
-* [select](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#select)
-* [eq](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#eq)
-* [gt](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#gt)
-* [gte](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#gte)
-* [lt](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#lt)
-* [lte](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#lte)
-* [neq](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#neq)
-* [like](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#like)
-* [ilike](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#ilike)
-* [in](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#inList)
-* [is.null](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#null)
-* [is.true](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#true)
-* [is.false](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#false)
-* [fts](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#fts)
-* [plfts](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#plfts)
-* [phfts](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#plfts)
-* [not](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries#not)
+* [select](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#select)
+* [eq](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#eq)
+* [gt](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#gt)
+* [gte](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#gte)
+* [lt](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#lt)
+* [lte](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#lte)
+* [neq](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#neq)
+* [like](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#like)
+* [ilike](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#ilike)
+* [in](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#inList)
+* [is.null](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#null)
+* [is.true](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#true)
+* [is.false](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#false)
+* [fts](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#fts)
+* [plfts](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#plfts)
+* [phfts](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#plfts)
+* [not](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#not)
 
-[View Full Documentation](https://package.elm-lang.org/packages/alex-tan/postgrest-queries/latest/Postgrest-Queries)
+[View Full Documentation](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client)
 
 
 ## Using `select`
