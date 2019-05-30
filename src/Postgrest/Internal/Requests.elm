@@ -8,6 +8,7 @@ module Postgrest.Internal.Requests exposing
     , requestTypeToHTTPMethod
     , requestTypeToHeaders
     , setMandatoryParams
+    , setTimeout
     )
 
 import Http
@@ -124,3 +125,8 @@ fullURL { defaultParams, overrideParams, mandatoryParams, baseURL } =
     [ baseURLToString baseURL, toQueryString params ]
         |> List.filter (String.isEmpty >> Basics.not)
         |> String.join "?"
+
+
+setTimeout : Float -> Request a -> Request a
+setTimeout t =
+    mapRequest (\req -> { req | timeout = Just t })

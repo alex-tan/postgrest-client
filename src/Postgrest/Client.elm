@@ -1066,6 +1066,10 @@ type alias Request r =
     Request.Request r
 
 
+setTimeout : Float -> Request a -> Request a
+setTimeout =
+    Request.setTimeout
+
 
 type alias Endpoint a =
     Endpoint.Endpoint a
