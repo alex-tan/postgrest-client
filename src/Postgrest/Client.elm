@@ -2,6 +2,7 @@ module Postgrest.Client exposing
     ( Endpoint
     , Request
     , endpoint
+    , customEndpoint
     , getMany
     , postOne
     , getByPrimaryKey
@@ -65,6 +66,7 @@ module Postgrest.Client exposing
     , plfts
     , phfts
     , fts
+    , getOne
     )
 
 {-|
@@ -683,6 +685,11 @@ getMany e =
     defaultRequest e <| Get <| JD.list <| Endpoint.decoder e
 
 
+getOne : Endpoint r -> Request r
+getOne e =
+    defaultRequest e <| Get <| JD.index 0 <| Endpoint.decoder e
+
+
 type alias GetOptions a =
     { params : Params
     , decoder : Decoder a
@@ -935,19 +942,31 @@ primaryKey3 a b c =
     PrimaryKey [ a, b, c ]
 
 
-endpoint : BaseURL -> Decoder r -> Endpoint r
+endpoint : String -> Decoder r -> Endpoint r
 endpoint u decoder =
     Endpoint
-        { url = u
+        { url = BaseURL u
         , decoder = decoder
         , defaultSelect = Nothing
         , defaultOrder = Nothing
         }
 
 
-customEndpoint : EndpointOptions r -> Endpoint r
-customEndpoint =
+customEndpoint :
+    String
+    -> Decoder r
+    ->
+        { defaultSelect : Maybe (List Selectable)
+        , defaultOrder : Maybe (List ColumnOrder)
+        }
+    -> Endpoint r
+customEndpoint u decoder { defaultSelect, defaultOrder } =
     Endpoint
+        { url = BaseURL u
+        , decoder = decoder
+        , defaultSelect = defaultSelect
+        , defaultOrder = defaultOrder
+        }
 
 
 type alias PostgrestErrorJSON =
