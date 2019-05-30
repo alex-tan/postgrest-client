@@ -2,8 +2,8 @@ module Postgrest.Internal.Requests exposing
     ( Request(..)
     , RequestType(..)
     , defaultRequest
+    , fullURL
     , mapRequest
-    , requestToURL
     , requestTypeToBody
     , requestTypeToHTTPMethod
     , requestTypeToHeaders
@@ -115,8 +115,8 @@ mapRequest f (Request options) =
     Request (f options)
 
 
-requestToURL : RequestOptions r -> String
-requestToURL { defaultParams, overrideParams, mandatoryParams, baseURL } =
+fullURL : RequestOptions r -> String
+fullURL { defaultParams, overrideParams, mandatoryParams, baseURL } =
     let
         params =
             concatParams [ defaultParams, overrideParams, mandatoryParams ]

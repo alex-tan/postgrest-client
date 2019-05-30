@@ -813,7 +813,7 @@ toCmd jwt_ toMsg (Request options) =
     Http.request
         { method = requestTypeToHTTPMethod options.options
         , headers = requestTypeToHeaders jwt_ options.options
-        , url = requestToURL options
+        , url = fullURL options
         , body = requestTypeToBody options.options
         , timeout = options.timeout
         , tracker = Nothing
@@ -842,7 +842,7 @@ toTask jwt_ (Request o) =
     task
         { body = requestTypeToBody options
         , timeout = o.timeout
-        , url = requestToURL o
+        , url = fullURL o
         , method = requestTypeToHTTPMethod options
         , headers = requestTypeToHeaders jwt_ options
         , resolver =
