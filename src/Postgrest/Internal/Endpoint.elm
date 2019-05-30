@@ -11,19 +11,19 @@ import Postgrest.Internal.Params exposing (ColumnOrder, Params, Selectable, orde
 import Postgrest.Internal.URL exposing (BaseURL)
 
 
-type Endpoint record
-    = Endpoint (EndpointOptions record)
+type Endpoint a
+    = Endpoint (EndpointOptions a)
 
 
-type alias EndpointOptions record =
+type alias EndpointOptions a =
     { url : BaseURL
-    , decoder : Decoder record
+    , decoder : Decoder a
     , defaultSelect : Maybe (List Selectable)
     , defaultOrder : Maybe (List ColumnOrder)
     }
 
 
-defaultParams : Endpoint r -> Params
+defaultParams : Endpoint a -> Params
 defaultParams (Endpoint { defaultSelect, defaultOrder }) =
     [ defaultSelect |> Maybe.map select
     , defaultOrder |> Maybe.map order
@@ -31,11 +31,11 @@ defaultParams (Endpoint { defaultSelect, defaultOrder }) =
         |> List.filterMap identity
 
 
-decoder : Endpoint r -> Decoder r
+decoder : Endpoint a -> Decoder a
 decoder (Endpoint o) =
     o.decoder
 
 
-url : Endpoint r -> BaseURL
+url : Endpoint a -> BaseURL
 url (Endpoint o) =
     o.url

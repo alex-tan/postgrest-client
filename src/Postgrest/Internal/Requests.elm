@@ -40,7 +40,7 @@ type RequestType r
     | Delete r
 
 
-defaultRequest : Endpoint r -> RequestType returning -> Request returning
+defaultRequest : Endpoint b -> RequestType a -> Request a
 defaultRequest e requestType =
     Request
         { options = requestType
@@ -100,7 +100,7 @@ requestTypeToHTTPMethod r =
             "GET"
 
 
-setMandatoryParams : Params -> Request r -> Request r
+setMandatoryParams : Params -> Request a -> Request a
 setMandatoryParams p =
     mapRequest (\req -> { req | mandatoryParams = p })
 
@@ -110,7 +110,7 @@ returnRepresentationHeader =
     Http.header "Prefer" "return=representation"
 
 
-mapRequest : (RequestOptions r -> RequestOptions r) -> Request r -> Request r
+mapRequest : (RequestOptions a -> RequestOptions a) -> Request a -> Request a
 mapRequest f (Request options) =
     Request (f options)
 

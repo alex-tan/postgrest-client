@@ -4,6 +4,7 @@ module Postgrest.Client exposing
     , endpoint
     , customEndpoint
     , getMany
+    , getOne
     , postOne
     , getByPrimaryKey
     , patchByPrimaryKey
@@ -67,7 +68,7 @@ module Postgrest.Client exposing
     , plfts
     , phfts
     , fts
-    , getOne
+    , setTimeout
     )
 
 {-|
@@ -79,7 +80,12 @@ module Postgrest.Client exposing
 @docs Request
 @docs endpoint
 @docs customEndpoint
+
+
+# Endpoint a
+
 @docs getMany
+@docs getOne
 @docs postOne
 @docs getByPrimaryKey
 @docs patchByPrimaryKey
@@ -625,7 +631,7 @@ allAttributes =
     attributes [ "*" ]
 
 
-setParams : Params -> Request r -> Request r
+setParams : Params -> Request a -> Request a
 setParams p =
     mapRequest (\req -> { req | overrideParams = p })
 
@@ -690,12 +696,12 @@ type alias Param =
     Param.Param
 
 
-getMany : Endpoint r -> Request (List r)
+getMany : Endpoint a -> Request (List a)
 getMany e =
     defaultRequest e <| Get <| JD.list <| Endpoint.decoder e
 
 
-getOne : Endpoint r -> Request r
+getOne : Endpoint a -> Request a
 getOne e =
     defaultRequest e <| Get <| JD.index 0 <| Endpoint.decoder e
 
@@ -795,30 +801,30 @@ primaryKeyEqClause converter pk =
     ]
 
 
-getByPrimaryKey : Endpoint r -> PrimaryKey p -> p -> Request r
+getByPrimaryKey : Endpoint a -> PrimaryKey p -> p -> Request a
 getByPrimaryKey e primaryKeyToParams_ primaryKey_ =
     defaultRequest e (Get <| index 0 <| Endpoint.decoder e)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
 
 
-patchByPrimaryKey : Endpoint record -> PrimaryKey pk -> pk -> JE.Value -> Request record
+patchByPrimaryKey : Endpoint a -> PrimaryKey p -> p -> JE.Value -> Request a
 patchByPrimaryKey e primaryKeyToParams primaryKey_ body =
     defaultRequest e (Patch body <| index 0 <| Endpoint.decoder e)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
 
 
-deleteByPrimaryKey : Endpoint r -> PrimaryKey p -> p -> Request p
+deleteByPrimaryKey : Endpoint a -> PrimaryKey p -> p -> Request p
 deleteByPrimaryKey e primaryKeyToParams primaryKey_ =
     defaultRequest e (Delete primaryKey_)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
 
 
-postOne : Endpoint r -> JE.Value -> Request r
+postOne : Endpoint a -> JE.Value -> Request a
 postOne e body =
     defaultRequest e <| Post body <| index 0 <| Endpoint.decoder e
 
 
-toCmd : JWT -> (Result Error r -> msg) -> Request r -> Cmd msg
+toCmd : JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
 toCmd jwt_ toMsg (Request options) =
     Http.request
         { method = requestTypeToHTTPMethod options.options
@@ -843,7 +849,7 @@ toCmd jwt_ toMsg (Request options) =
         }
 
 
-toTask : JWT -> Request r -> Task Error r
+toTask : JWT -> Request a -> Task Error a
 toTask jwt_ (Request o) =
     let
         { options } =
@@ -952,10 +958,10 @@ primaryKey3 a b c =
     PrimaryKey [ a, b, c ]
 
 
-endpoint : String -> Decoder r -> Endpoint r
-endpoint u decoder =
+endpoint : String -> Decoder a -> Endpoint a
+endpoint a decoder =
     Endpoint
-        { url = BaseURL u
+        { url = BaseURL a
         , decoder = decoder
         , defaultSelect = Nothing
         , defaultOrder = Nothing
@@ -964,12 +970,12 @@ endpoint u decoder =
 
 customEndpoint :
     String
-    -> Decoder r
+    -> Decoder a
     ->
         { defaultSelect : Maybe (List Selectable)
         , defaultOrder : Maybe (List ColumnOrder)
         }
-    -> Endpoint r
+    -> Endpoint a
 customEndpoint u decoder { defaultSelect, defaultOrder } =
     Endpoint
         { url = BaseURL u
@@ -1060,5 +1066,6 @@ type alias Request r =
     Request.Request r
 
 
-type alias Endpoint r =
-    Endpoint.Endpoint r
+
+type alias Endpoint a =
+    Endpoint.Endpoint a
