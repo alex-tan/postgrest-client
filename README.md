@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/alex-tan/postgrest-client.svg?branch=master)](https://travis-ci.org/alex-tan/postgrest-queries)
 
-This package allows you to easily construct [Postgrest query strings](http://postgrest.org/en/v5.1/api.html#horizontal-filtering-rows) using Elm.
+This package allows you to both easily construct [Postgrest query strings](http://postgrest.org/en/v5.1/api.html#horizontal-filtering-rows) and also make postgrest requests using Elm.
 
 Most query operators are currently supported:
 
