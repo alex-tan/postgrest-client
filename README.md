@@ -4,6 +4,63 @@
 
 This package allows you to both easily construct [Postgrest query strings](http://postgrest.org/en/v5.1/api.html#horizontal-filtering-rows) and also make postgrest requests using Elm.
 
+This library allows you to construct and execute requests in a typesafe manner, with
+little boilerplate. Here's what `Api.People` might look like:
+
+```elm
+import Api.People.Decoders exposing (..)
+import Api.People.Encoders exposing (..)
+import Api.People.Types exposing (..)
+import Json.Decode exposing (..)
+import Postgrest.Client as P
+
+endpoint : P.Endpoint Person
+endpoint =
+    P.endpoint
+        (postgrestURL "/people")
+        decodeUnit
+
+primaryKey : P.PrimaryKey PersonID
+primaryKey =
+    P.primaryKey ( "id", P.int << personID )
+
+getMany : P.Params -> P.Request (List Person)
+getMany params =
+    P.getMany endpoint
+        |> P.setParams params
+
+delete : PersonID -> P.Request PersonID
+delete =
+    P.deleteByPrimaryKey endpoint primaryKey
+
+post : PersonSubmission -> P.Request Person
+post submission =
+    P.postOne endpoint (encode submission)
+```
+
+Here's how you could use it:
+
+```elm
+import Api.People as People
+import Postgrest.Client as P
+
+jwt =
+    P.jwt "myjwt"
+
+cmdExamples =
+    [ People.post
+        { firstName = "Yasujirō"
+        , lastName = "Ozu"
+        }
+        |> P.toCmd jwt PersonCreated
+    , People.getMany
+        [ P.order [ P.asc "firstName" ], P.limit 10 ]
+        |> P.toCmd jwt PeopleLoaded
+    , Person.delete personID
+        |> P.toCmd jwt PersonDeleted
+    ]
+```
+
 Most query operators are currently supported:
 
 * [select](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client#select)
@@ -26,6 +83,8 @@ Most query operators are currently supported:
 
 [View Full Documentation](https://package.elm-lang.org/packages/alex-tan/postgrest-client/latest/Postgrest-Client)
 
+
+# URL Query Construction
 
 ## Using `select`
 

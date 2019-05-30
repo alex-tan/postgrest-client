@@ -10,6 +10,7 @@ module Postgrest.Client exposing
     , patchByPrimaryKey
     , deleteByPrimaryKey
     , setParams
+    , setTimeout
     , get
     , post
     , unsafePatch
@@ -20,7 +21,7 @@ module Postgrest.Client exposing
     , primaryKey
     , primaryKey2
     , primaryKey3
-    , Error(..), toHttpError
+    , Error(..), PostgrestErrorJSON, toHttpError
     , Param
     , Params
     , Selectable
@@ -68,10 +69,65 @@ module Postgrest.Client exposing
     , plfts
     , phfts
     , fts
-    , setTimeout
     )
 
 {-|
+
+
+# postgrest-client
+
+This library allows you to construct and execute requests in a typesafe manner, with
+little boilerplate. Here's what `Api.People` might look like:
+
+    import Api.People.Decoders exposing (..)
+    import Api.People.Encoders exposing (..)
+    import Api.People.Types exposing (..)
+    import Json.Decode exposing (..)
+    import Postgrest.Client as P
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint
+            (postgrestURL "/people")
+            decodeUnit
+
+    primaryKey : P.PrimaryKey PersonID
+    primaryKey =
+        P.primaryKey ( "id", P.int << personID )
+
+    getMany : P.Params -> P.Request (List Person)
+    getMany params =
+        P.getMany endpoint
+            |> P.setParams params
+
+    delete : PersonID -> P.Request PersonID
+    delete =
+        P.deleteByPrimaryKey endpoint primaryKey
+
+    post : PersonSubmission -> P.Request Person
+    post submission =
+        P.postOne endpoint (encode submission)
+
+Here's how you could use it:
+
+    import Api.People as People
+    import Postgrest.Client as P
+
+    jwt =
+        P.jwt "myjwt"
+
+    cmdExamples =
+        [ People.post
+            { firstName = "Yasujirō"
+            , lastName = "Ozu"
+            }
+            |> P.toCmd jwt PersonCreated
+        , People.getMany
+            [ P.order [ P.asc "firstName" ], P.limit 10 ]
+            |> P.toCmd jwt PeopleLoaded
+        , Person.delete personID
+            |> P.toCmd jwt PersonDeleted
+        ]
 
 
 # Request Construction and Modification
@@ -90,7 +146,12 @@ module Postgrest.Client exposing
 @docs getByPrimaryKey
 @docs patchByPrimaryKey
 @docs deleteByPrimaryKey
+
+
+# Request Options
+
 @docs setParams
+@docs setTimeout
 
 
 # Generic Requests
@@ -121,7 +182,7 @@ module Postgrest.Client exposing
 
 # Errors
 
-@docs Error, toHttpError
+@docs Error, PostgrestErrorJSON, toHttpError
 
 
 # URL Parameter Construction
@@ -631,6 +692,17 @@ allAttributes =
     attributes [ "*" ]
 
 
+{-| Used to set the parameters of your request.
+
+    getPeople : P.Request (List Person)
+    getPeople =
+        P.getMany endpoint
+            |> P.setParams
+                [ P.order [ P.asc "first_name" ]
+                , P.limit 20
+                ]
+
+-}
 setParams : Params -> Request a -> Request a
 setParams p =
     mapRequest (\req -> { req | overrideParams = p })
@@ -687,7 +759,7 @@ type alias Selectable =
 {-| A list of Param.
 -}
 type alias Params =
-    Param.Params
+    List Param
 
 
 {-| An individual postgrest parameter.
@@ -696,23 +768,53 @@ type alias Param =
     Param.Param
 
 
+{-| Used to GET multiple records from the provided endpoint.
+Converts your endpoint decoder into `(list decoder)` to decode multiple records.
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodePerson
+
+    getAll : P.Request (List Person)
+    getAll =
+        P.getMany endpoint
+            |> P.setParams [ P.limit 20 ]
+
+-}
 getMany : Endpoint a -> Request (List a)
 getMany e =
     defaultRequest e <| Get <| JD.list <| Endpoint.decoder e
 
 
+{-| Used to GET a single record. Converts your endpoint decoder into `(index 0 decoder)` to extract
+it from postgrest's JSON array response and sets `limit=1` in the parameters. If you're requesting by
+primary key see `getOneByPrimaryKey`.
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodePerson
+
+    getOnePersonByName : String -> P.Request Person
+    getOnePersonByName name =
+        P.getOne endpoint
+            |> P.setParams [ P.param "name" <| P.eq name ]
+
+-}
 getOne : Endpoint a -> Request a
 getOne e =
-    defaultRequest e <| Get <| JD.index 0 <| Endpoint.decoder e
+    (defaultRequest e <| Get <| JD.index 0 <| Endpoint.decoder e)
+        |> setParams [ limit 1 ]
 
 
-type alias GetOptions a =
-    { params : Params
-    , decoder : Decoder a
-    }
-
-
-get : String -> GetOptions a -> Request a
+{-| The most basic way to make a get request.
+-}
+get :
+    String
+    ->
+        { params : Params
+        , decoder : Decoder a
+        }
+    -> Request a
 get baseURL { params, decoder } =
     Request
         { options = Get decoder
@@ -724,14 +826,16 @@ get baseURL { params, decoder } =
         }
 
 
-type alias PostOptions a =
-    { params : Params
-    , decoder : Decoder a
-    , body : JE.Value
-    }
-
-
-post : String -> PostOptions a -> Request a
+{-| The most basic way to make a post request.
+-}
+post :
+    String
+    ->
+        { params : Params
+        , decoder : Decoder a
+        , body : JE.Value
+        }
+    -> Request a
 post baseURL { params, decoder, body } =
     Request
         { options = Post body decoder
@@ -743,14 +847,18 @@ post baseURL { params, decoder, body } =
         }
 
 
-type alias UnsafePatchOptions a =
-    { body : JE.Value
-    , decoder : Decoder a
-    , params : Params
-    }
-
-
-unsafePatch : String -> UnsafePatchOptions a -> Request a
+{-| Titled unsafe because if you provide incorrect or no parameters it will make a PATCH request
+to all resources the requesting user has access to at that endpoint. Use with caution.
+See [Block Full-Table Operations](http://postgrest.org/en/v5.2/admin.html#block-fulltable).
+-}
+unsafePatch :
+    String
+    ->
+        { body : JE.Value
+        , decoder : Decoder a
+        , params : Params
+        }
+    -> Request a
 unsafePatch baseURL { body, decoder, params } =
     Request
         { options = Patch body decoder
@@ -768,6 +876,10 @@ type alias UnsafeDeleteOptions a =
     }
 
 
+{-| Titled unsafe because if you provide incorrect or no parameters it will make a DELETE request
+to all resources the requesting user has access to at that endpoint. Use with caution.
+See [Block Full-Table Operations](http://postgrest.org/en/v5.2/admin.html#block-fulltable).
+-}
 unsafeDelete : String -> UnsafeDeleteOptions a -> Request a
 unsafeDelete url { returning, params } =
     Request
@@ -801,29 +913,104 @@ primaryKeyEqClause converter pk =
     ]
 
 
+{-| Used to GET a single record by primary key. This is the recommended way to do a singular GET request
+assuming your table has a primary key.
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodePerson
+
+    primaryKey : P.PrimaryKey Int
+    primaryKey =
+        P.primaryKey ( "id", P.int )
+
+    getByPrimaryKey : Int -> P.Request Person
+    getByPrimaryKey =
+        P.getByPrimaryKey endpoint primaryKey
+
+-}
 getByPrimaryKey : Endpoint a -> PrimaryKey p -> p -> Request a
 getByPrimaryKey e primaryKeyToParams_ primaryKey_ =
     defaultRequest e (Get <| index 0 <| Endpoint.decoder e)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams_ primaryKey_)
 
 
+{-| Used to PATCH a single record by primary key. This is the recommended way to do a PATCH request
+assuming your table has a primary key. The decoder will decode the record after it's been patched if the request is successful.
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodePerson
+
+    primaryKey =
+        P.primaryKey ( "id", P.int )
+
+    updatePerson : PersonForm -> Int -> P.Request Person
+    updatePerson submission id =
+        P.patchByPrimaryKey endpoint primaryKey (encodeSubmission submission)
+
+    -- Would create a request to patch to "/people?id=eq.3"
+    updatePerson form 3
+
+-}
 patchByPrimaryKey : Endpoint a -> PrimaryKey p -> p -> JE.Value -> Request a
 patchByPrimaryKey e primaryKeyToParams primaryKey_ body =
     defaultRequest e (Patch body <| index 0 <| Endpoint.decoder e)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
 
 
+{-| Used to DELETE a single record by primary key. This is the recommended way to do a DELETE request
+if your table has a primary key. The decoder will decode the record after it's been patched if the request is successful.
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodePerson
+
+    primaryKey =
+        P.primaryKey ( "id", P.int )
+
+    delete : Int -> P.Request Int
+    delete =
+        P.deleteByPrimaryKey endpoint primaryKey
+
+    -- Would create a request to DELETE to "/people?id=eq.3"
+    -- and the success value would be the ID passed in.
+    -- So your Msg would look like:
+    -- | DeleteSuccess (Result P.Error Int)
+    delete 3
+
+-}
 deleteByPrimaryKey : Endpoint a -> PrimaryKey p -> p -> Request p
 deleteByPrimaryKey e primaryKeyToParams primaryKey_ =
     defaultRequest e (Delete primaryKey_)
         |> setMandatoryParams (primaryKeyEqClause primaryKeyToParams primaryKey_)
 
 
+{-| Used to create a single record at the endpoint you provide and an encoded JSON value.
+
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodePerson
+
+    encodePerson : Person -> JE.Value
+    encodePerson p =
+        object
+            [ ( "first_name", JE.string p.firstName )
+            , ( "last_name", JE.string p.lastName )
+            ]
+
+    post : PersonForm -> P.Request Person
+    post submission =
+        P.postOne endpoint (encodePerson submission)
+
+-}
 postOne : Endpoint a -> JE.Value -> Request a
 postOne e body =
     defaultRequest e <| Post body <| index 0 <| Endpoint.decoder e
 
 
+{-| toCmd takes a JWT, Msg and a Request and turns it into a Cmd.
+-}
 toCmd : JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
 toCmd jwt_ toMsg (Request options) =
     Http.request
@@ -849,6 +1036,8 @@ toCmd jwt_ toMsg (Request options) =
         }
 
 
+{-| toTask takes a JWT and a Request and turns it into a Task.
+-}
 toTask : JWT -> Request a -> Task Error a
 toTask jwt_ (Request o) =
     let
@@ -935,29 +1124,95 @@ expectWhatever toMsg =
     Http.expectStringResponse toMsg (resolve (always <| Ok ()))
 
 
-type alias PKPart pk =
-    ( String, pk -> Value )
-
-
+{-| Can be used together with endpoint to make request construction easier. See
+[primaryKey](#primaryKey) and [endpoint](#endpoint).
+-}
 type PrimaryKey pk
-    = PrimaryKey (List (PKPart pk))
+    = PrimaryKey (List ( String, pk -> Value ))
 
 
-primaryKey : PKPart pk -> PrimaryKey pk
+{-| Used to construct a primary key made up of one column.
+Takes a tuple of the column name of your primary key and a function
+to convert your elm representation of that primary key into a postgrest parameter.
+
+    primaryKey : P.PrimaryKey Int
+    primaryKey =
+        primaryKey ( "id", P.int )
+
+is the simplest example. If you have custom type to represent your primary key you
+could do this:
+
+    type ID
+        = ID Int
+
+    idToInt : ID -> Int
+    idToInt (ID id) =
+        id
+
+    primaryKey : P.PrimaryKey ID
+    primaryKey =
+        P.primaryKey ( "id", P.int << idToInt )
+
+-}
+primaryKey : ( String, pk -> Value ) -> PrimaryKey pk
 primaryKey a =
     PrimaryKey [ a ]
 
 
-primaryKey2 : PKPart pk -> PKPart pk -> PrimaryKey pk
+{-| Used to construct a primary key made up of two columns.
+Takes two tuples, each with a column name and a function
+to convert your elm representation of that primary key into a postgrest parameter.
+
+    primaryKey2 ( "id", P.int )
+
+is the simplest example. If you have custom type to represent your primary key you
+could do this:
+
+    type alias ParentID =
+        Int
+
+    type alias Category =
+        String
+
+    type alias MyPrimaryKey =
+        ( ParentID, Category )
+
+    primaryKey : P.PrimaryKey MyPrimaryKey
+    primaryKey =
+        P.primaryKey2
+            ( "parent_id", P.int << Tuple.first )
+            ( "category", P.string << Tuple.second )
+
+-}
+primaryKey2 : ( String, pk -> Value ) -> ( String, pk -> Value ) -> PrimaryKey pk
 primaryKey2 a b =
     PrimaryKey [ a, b ]
 
 
-primaryKey3 : PKPart pk -> PKPart pk -> PKPart pk -> PrimaryKey pk
+{-| Used to construct primary keys that are made up of three columns. See [primaryKey2](#primaryKey2) for
+a similar example of how this could be used.
+-}
+primaryKey3 : ( String, pk -> Value ) -> ( String, pk -> Value ) -> ( String, pk -> Value ) -> PrimaryKey pk
 primaryKey3 a b c =
     PrimaryKey [ a, b, c ]
 
 
+{-| The simplest way to define an endpoint. You provide it the URL and a decoder.
+It can then be used to quickly construct POST, GET, PATCH, and DELETE requests.
+The decoder provided should just be a decoder of the record itself, not a decoder of
+an object inside an array.
+
+    decodePerson : Decoder Person
+    decodePerson =
+        map2 Person
+            (field "first_name" string)
+            (field "last_name" string)
+
+    peopleEndpoint : P.Endpoint Person
+    peopleEndpoint =
+        P.endpoint "/rest/people" decodePerson
+
+-}
 endpoint : String -> Decoder a -> Endpoint a
 endpoint a decoder =
     Endpoint
@@ -968,6 +1223,18 @@ endpoint a decoder =
         }
 
 
+{-| Define an endpoint with extra options. To quickly construct POST, GET, PATCH, and DELETE requests.
+`defaultOrder` and `defaultSelect` can be overriden by using `setParams` once a request is constructed.
+
+    peopleEndpoint : P.Endpoint Person
+    peopleEndpoint =
+        P.endpoint "/rest/people"
+            decodePerson
+            { defaultSelect = Just [ P.attribute "id", P.attribute "name" ]
+            , defaultOrder = Just [ P.asc "name" ]
+            }
+
+-}
 customEndpoint :
     String
     -> Decoder a
@@ -985,6 +1252,8 @@ customEndpoint u decoder { defaultSelect, defaultOrder } =
         }
 
 
+{-| Contains any details postgrest might have given us about a failed request.
+-}
 type alias PostgrestErrorJSON =
     { message : Maybe String
     , details : Maybe String
@@ -1011,6 +1280,9 @@ emptyErrors =
         Nothing
 
 
+{-| `Error` Looks a lot like `Http.Error` except `BadStatus` includes a second argument,
+`PostgrestErrorJSON` with any details htat postgrest might have given us about a failed request.
+-}
 type Error
     = Timeout
     | BadUrl String
@@ -1019,6 +1291,10 @@ type Error
     | BadBody String
 
 
+{-| Converts the custom HTTP error used by this package into an elm/http Error.
+This can be useful if you're using `Task.map2`, `Task.map3`, etc... and each of the
+tasks need to have the same error type.
+-}
 toHttpError : Error -> Http.Error
 toHttpError e =
     case e of
@@ -1048,28 +1324,54 @@ badStatusBodyToPostgrestError statusCode body =
             BadStatus statusCode emptyErrors
 
 
+{-| If you've already created a JWT with `jwt` you can extract the original string with
+this function.
+
+    myJWT = P.jwt "abcdef"
+
+    jwtString myJWT -- "abcdef"
+
+-}
 jwtString : JWT -> String
 jwtString =
     JWT.jwtString
 
 
+{-| Pass the jwt string into this function to make it a JWT. This is used with `toCmd` and `toTask`
+to make requests.
+
+    myJWT =
+        P.jwt "abcdef"
+
+-}
 jwt : String -> JWT
 jwt =
     JWT.jwt
 
 
+{-| The type used to store the JWT string.
+-}
 type alias JWT =
     JWT.JWT
 
 
+{-| Request can be used with toCmd and toTask to make a request.
+-}
 type alias Request r =
     Request.Request r
 
 
+{-| Sets the timeout of your request. The behaviour is the same
+of that in the elm/http package.
+-}
 setTimeout : Float -> Request a -> Request a
 setTimeout =
     Request.setTimeout
 
 
+{-| Think of an Endpoint as a combination between a base url like `/schools` and
+an elm/json `Decoder`. The endpoint can be passed to other functions in this library,
+sometimes along with PrimaryKey to make constructing certain types of requests easier.
+-}
 type alias Endpoint a =
     Endpoint.Endpoint a
