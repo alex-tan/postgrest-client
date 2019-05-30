@@ -12,6 +12,7 @@ module Postgrest.Client exposing
     , get
     , post
     , unsafePatch
+    , unsafeDelete
     , JWT, jwt, jwtString
     , toCmd, toTask
     , PrimaryKey
@@ -197,17 +198,26 @@ module Postgrest.Client exposing
 
 -}
 
-import Dict exposing (Dict)
-import Http exposing (Resolver, header, task)
+import Http exposing (Resolver, task)
 import Json.Decode as JD exposing (Decoder, decodeString, field, index, list, map, map4, maybe)
 import Json.Encode as JE
-import Postgrest.Internal.Endpoint as Endpoint exposing (Endpoint(..), EndpointOptions)
+import Postgrest.Internal.Endpoint as Endpoint exposing (Endpoint(..))
 import Postgrest.Internal.JWT as JWT exposing (JWT)
 import Postgrest.Internal.Params as Param exposing (ColumnOrder(..), Language, NullOption(..), Operator(..), Param(..), Selectable(..), Value(..))
-import Postgrest.Internal.Requests as Request exposing (..)
+import Postgrest.Internal.Requests as Request
+    exposing
+        ( Request(..)
+        , RequestType(..)
+        , defaultRequest
+        , fullURL
+        , mapRequest
+        , requestTypeToBody
+        , requestTypeToHTTPMethod
+        , requestTypeToHeaders
+        , setMandatoryParams
+        )
 import Postgrest.Internal.URL exposing (BaseURL(..))
 import Task exposing (Task)
-import Url
 
 
 {-| Negate a condition.
@@ -853,10 +863,10 @@ toTask jwt_ (Request o) =
                 Get decoder ->
                     jsonResolver decoder
 
-                Post body decoder ->
+                Post _ decoder ->
                     jsonResolver decoder
 
-                Patch body decoder ->
+                Patch _ decoder ->
                     jsonResolver decoder
         }
 

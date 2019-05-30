@@ -55,16 +55,16 @@ defaultRequest e requestType =
 requestTypeToHeaders : JWT -> RequestType r -> List Http.Header
 requestTypeToHeaders jwt_ r =
     case r of
-        Post body decoder ->
+        Post _ _ ->
             [ jwtHeader jwt_, returnRepresentationHeader ]
 
-        Patch body decoder ->
+        Patch _ _ ->
             [ jwtHeader jwt_, returnRepresentationHeader ]
 
-        Get decoder ->
+        Get _ ->
             [ jwtHeader jwt_ ]
 
-        Delete returning ->
+        Delete _ ->
             [ jwtHeader jwt_ ]
 
 
