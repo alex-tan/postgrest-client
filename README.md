@@ -17,7 +17,7 @@ import Postgrest.Client as P
 endpoint : P.Endpoint Person
 endpoint =
     P.endpoint
-        (postgrestURL "/people")
+        "/people"
         decodeUnit
 
 primaryKey : P.PrimaryKey PersonID

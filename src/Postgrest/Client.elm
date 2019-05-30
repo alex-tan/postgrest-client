@@ -87,9 +87,7 @@ little boilerplate. Here's what `Api.People` might look like:
 
     endpoint : P.Endpoint Person
     endpoint =
-        P.endpoint
-            (postgrestURL "/people")
-            decodeUnit
+        P.endpoint "/people" decodeUnit
 
     primaryKey : P.PrimaryKey PersonID
     primaryKey =
