@@ -1113,13 +1113,13 @@ expectWhatever toMsg =
                 Http.NetworkError_ ->
                     Err NetworkError
 
-                Http.BadStatus_ metadata _ ->
-                    Err <| BadStatus metadata.statusCode emptyErrors
+                Http.BadStatus_ metadata body ->
+                    Err <| BadStatus metadata.statusCode "" emptyErrors
 
                 Http.GoodStatus_ _ body ->
-                    Result.mapError BadBody (toResult body)
+                    Result.mapError BadBody <| toResult body
     in
-    Http.expectStringResponse toMsg (resolve (always <| Ok ()))
+    Http.expectStringResponse toMsg <| resolve <| always <| Ok ()
 
 
 {-| Can be used together with endpoint to make request construction easier. See
@@ -1285,7 +1285,7 @@ type Error
     = Timeout
     | BadUrl String
     | NetworkError
-    | BadStatus Int PostgrestErrorJSON
+    | BadStatus Int String PostgrestErrorJSON
     | BadBody String
 
 
@@ -1305,7 +1305,7 @@ toHttpError e =
         NetworkError ->
             Http.NetworkError
 
-        BadStatus i _ ->
+        BadStatus i _ _ ->
             Http.BadStatus i
 
         BadBody s ->
@@ -1314,12 +1314,17 @@ toHttpError e =
 
 badStatusBodyToPostgrestError : Int -> String -> Error
 badStatusBodyToPostgrestError statusCode body =
+    BadStatus statusCode body <| bodyToPostgrestErrors body
+
+
+bodyToPostgrestErrors : String -> PostgrestErrorJSON
+bodyToPostgrestErrors body =
     case JD.decodeString decodePostgrestError body of
         Ok errors ->
-            BadStatus statusCode errors
+            errors
 
         Err _ ->
-            BadStatus statusCode emptyErrors
+            emptyErrors
 
 
 {-| If you've already created a JWT with `jwt` you can extract the original string with
