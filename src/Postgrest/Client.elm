@@ -1113,7 +1113,7 @@ expectWhatever toMsg =
                 Http.NetworkError_ ->
                     Err NetworkError
 
-                Http.BadStatus_ metadata body ->
+                Http.BadStatus_ metadata _ ->
                     Err <| BadStatus metadata.statusCode "" emptyErrors
 
                 Http.GoodStatus_ _ body ->

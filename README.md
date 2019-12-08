@@ -5,37 +5,89 @@
 This package allows you to both easily construct [Postgrest query strings](http://postgrest.org/en/v5.1/api.html#horizontal-filtering-rows) and also make postgrest requests using Elm.
 
 This library allows you to construct and execute requests in a typesafe manner, with
-little boilerplate. Here's what `Api.People` might look like:
+little boilerplate. Here's what a full example might look like:
 
 ```elm
-import Api.People.Decoders exposing (..)
-import Api.People.Encoders exposing (..)
-import Api.People.Types exposing (..)
+module Api.People exposing (delete, getMany, post)
+
 import Json.Decode exposing (..)
+import Json.Encode as JE
 import Postgrest.Client as P
 
-endpoint : P.Endpoint Person
-endpoint =
-    P.endpoint
-        "/people"
-        decodeUnit
 
+-- Define the record you would fetch back from the server.
+type alias Person =
+    { id : PersonID
+    , name : String
+    }
+
+
+-- Define a submission record, without the primary key.
+type alias PersonSubmission =
+    { name : String
+    }
+
+
+-- Decoders are written using Json.Decode
+decodeUnit : Decoder Person
+decodeUnit =
+    map2 Person
+        (field "id" <| map PersonID int)
+        (field "name" string)
+
+
+-- Encoders are written using Json.Encode
+encode : PersonSubmission -> JE.Value
+encode person =
+    JE.object
+        [ ( "name", JE.string person.name )
+        ]
+
+
+-- Optional, but recommended to have a type that
+-- represents your primary key.
+type PersonID
+    = PersonID Int
+
+
+-- And a way to unwrap it...
+personID : PersonID -> Int
+personID (PersonID id) =
+    id
+
+
+-- Tell Postgrest.Client the column name of your primary key and
+-- how to convert it into a parameter.
 primaryKey : P.PrimaryKey PersonID
 primaryKey =
     P.primaryKey ( "id", P.int << personID )
 
-getMany : P.Params -> P.Request (List Person)
-getMany params =
-    P.getMany endpoint
-        |> P.setParams params
 
+-- Tell Postgrest.Client the URL of the postgrest endpoint and how
+-- to decode records from it.
+endpoint : P.Endpoint Person
+endpoint =
+    P.endpoint "/people" decodeUnit
+
+
+-- Fetch many records. If you want to specify parameters use `setParams`
+getMany : P.Request (List Person)
+getMany =
+    P.getMany endpoint
+
+
+-- Delete by primary key. This is a convenience function that reduces
+-- the likelihood that you delete the wrong records by specifying incorrect
+-- parameters.
 delete : PersonID -> P.Request PersonID
 delete =
     P.deleteByPrimaryKey endpoint primaryKey
 
+
+-- Create a record.
 post : PersonSubmission -> P.Request Person
-post submission =
-    P.postOne endpoint (encode submission)
+post =
+    P.postOne endpoint << encode
 ```
 
 Here's how you could use it:
