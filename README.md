@@ -96,20 +96,28 @@ Here's how you could use it:
 import Api.People as People
 import Postgrest.Client as P
 
+jwt : P.JWT
 jwt =
     P.jwt "myjwt"
 
+type Msg 
+    = PersonCreated (Result P.Error Person)
+    | PeopleLoaded (Result P.Error (List Person))
+    | PersonDeleted (Result P.Error PersonID)
+
+toCmd = 
+    P.toCmd jwt
+
 cmdExamples =
     [ People.post
-        { firstName = "Yasujirō"
-        , lastName = "Ozu"
+        { name = "Yasujirō Ozu"
         }
         |> P.toCmd jwt PersonCreated
     , People.getMany
-        [ P.order [ P.asc "firstName" ], P.limit 10 ]
-        |> P.toCmd jwt PeopleLoaded
+        [ P.order [ P.asc "name" ], P.limit 10 ]
+        |> toCmd PeopleLoaded
     , Person.delete personID
-        |> P.toCmd jwt PersonDeleted
+        |> toCmd PersonDeleted
     ]
 ```
 
