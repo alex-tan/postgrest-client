@@ -115,8 +115,8 @@ matching =
         , nestedParam [ "actors" ] <| offset 2
         ]
       )
-    , ( "a=like.\"a*c\"", [ param "a" <| like "a*c" ] )
-    , ( "a=ilike.\"a*c\"", [ param "a" <| ilike "a*c" ] )
+    , ( "a=like.a*c", [ param "a" <| like "a*c" ] )
+    , ( "a=ilike.a*c", [ param "a" <| ilike "a*c" ] )
     , ( "foo=is.false", [ P.param "foo" P.false ] )
     , ( "foo=is.true", [ P.param "foo" P.true ] )
     , ( "foo=is.null", [ P.param "foo" P.null ] )

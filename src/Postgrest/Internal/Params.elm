@@ -267,10 +267,10 @@ stringifyClause operator =
             fullTextSearch "fts" lang val
 
         Like s ->
-            "like." ++ (stringifyQuoted <| String s)
+            "like." ++ (stringifyUnquoted <| String s)
 
         Ilike s ->
-            "ilike." ++ (stringifyQuoted <| String s)
+            "ilike." ++ (stringifyUnquoted <| String s)
 
         Plfts lang val ->
             fullTextSearch "plfts" lang val
