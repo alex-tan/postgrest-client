@@ -120,6 +120,8 @@ matching =
     , ( "foo=is.false", [ P.param "foo" P.false ] )
     , ( "foo=is.true", [ P.param "foo" P.true ] )
     , ( "foo=is.null", [ P.param "foo" P.null ] )
+    , ( "tag=cs.{foo,bar}", [ P.param "tag" <| P.contains <| List.map P.string [ "foo", "bar" ] ] )
+    , ( "tag=cd.{foo,bar}", [ P.param "tag" <| P.containedIn <| List.map P.string [ "foo", "bar" ] ] )
     ]
 
 
