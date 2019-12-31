@@ -61,8 +61,8 @@ type Operator
     | Fts (Maybe Language) String
     | Plfts (Maybe Language) String
     | Phfts (Maybe Language) String
-      -- | Cs (List Value)
-      -- | Cd (List Value)
+    | Cs (List Value)
+    | Cd (List Value)
       -- | Ov Range
       -- | Sl Range
       -- | Sr Range
@@ -113,6 +113,17 @@ combineParams defaults override =
         (dictifyParams override)
         (dictifyParams defaults)
         |> Dict.values
+
+
+curlyBraceList : List Value -> String
+curlyBraceList ls =
+    let
+        inner =
+            ls
+                |> List.map stringifyUnquoted
+                |> String.join ","
+    in
+    "{" ++ inner ++ "}"
 
 
 dictifyParams : Params -> Dict String Param
@@ -235,6 +246,12 @@ stringifyClause operator =
 
         In val ->
             "in.(" ++ stringifyQuoted val ++ ")"
+
+        Cs val ->
+            "cs." ++ curlyBraceList val
+
+        Cd val ->
+            "cd." ++ curlyBraceList val
 
         Value val ->
             stringifyUnquoted val

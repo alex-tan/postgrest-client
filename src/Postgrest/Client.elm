@@ -58,6 +58,8 @@ module Postgrest.Client exposing
     , offset
     , ilike
     , like
+    , contains
+    , containedIn
     , string
     , int
     , list
@@ -79,52 +81,102 @@ module Postgrest.Client exposing
 This library allows you to construct and execute requests in a typesafe manner, with
 little boilerplate. Here's what `Api.People` might look like:
 
-    import Api.People.Decoders exposing (..)
-    import Api.People.Encoders exposing (..)
-    import Api.People.Types exposing (..)
     import Json.Decode exposing (..)
+    import Json.Encode as JE
     import Postgrest.Client as P
 
-    endpoint : P.Endpoint Person
-    endpoint =
-        P.endpoint "/people" decodeUnit
 
+    -- Optional, but recommended to have a type that
+    -- represents your primary key.
+    type PersonID
+        = PersonID Int
+
+    -- And a way to unwrap it...
+    personID : PersonID -> Int
+    personID (PersonID id) =
+        id
+
+    -- Define the record you would fetch back from the server.
+    type alias Person =
+        { id : PersonID
+        , name : String
+        }
+
+    -- Define a submission record, without the primary key.
+    type alias PersonSubmission =
+        { name : String
+        }
+
+    -- Decoders are written using Json.Decode
+    decodeUnit : Decoder Person
+    decodeUnit =
+        map2 Person
+            (field "id" <| map PersonID int)
+            (field "name" string)
+
+    -- Encoders are written using Json.Encode
+    encode : PersonSubmission -> JE.Value
+    encode person =
+        JE.object
+            [ ( "name", JE.string person.name )
+            ]
+
+    -- Tell Postgrest.Client the column name of your primary key and
+    -- how to convert it into a parameter.
     primaryKey : P.PrimaryKey PersonID
     primaryKey =
         P.primaryKey ( "id", P.int << personID )
 
-    getMany : P.Params -> P.Request (List Person)
-    getMany params =
-        P.getMany endpoint
-            |> P.setParams params
+    -- Tell Postgrest.Client the URL of the postgrest endpoint and how
+    -- to decode records from it.
+    endpoint : P.Endpoint Person
+    endpoint =
+        P.endpoint "/people" decodeUnit
 
+    -- Fetch many records. If you want to specify parameters use `setParams`
+    getMany : P.Request (List Person)
+    getMany =
+        P.getMany endpoint
+
+    -- Delete by primary key. This is a convenience function that reduces
+    -- the likelihood that you delete the wrong records by specifying incorrect
+    -- parameters.
     delete : PersonID -> P.Request PersonID
     delete =
         P.deleteByPrimaryKey endpoint primaryKey
 
+    -- Create a record.
     post : PersonSubmission -> P.Request Person
-    post submission =
-        P.postOne endpoint (encode submission)
+    post =
+        P.postOne endpoint << encode
 
 Here's how you could use it:
 
     import Api.People as People
     import Postgrest.Client as P
 
+    jwt : P.JWT
     jwt =
         P.jwt "myjwt"
 
+    type Msg
+        = PersonCreated (Result P.Error Person)
+        | PeopleLoaded (Result P.Error (List Person))
+        | PersonDeleted (Result P.Error PersonID)
+
+    toCmd =
+        P.toCmd jwt
+
     cmdExamples =
         [ People.post
-            { firstName = "Yasujirō"
-            , lastName = "Ozu"
+            { name = "Yasujirō Ozu"
             }
             |> P.toCmd jwt PersonCreated
         , People.getMany
-            [ P.order [ P.asc "firstName" ], P.limit 10 ]
-            |> P.toCmd jwt PeopleLoaded
+            [ P.order [ P.asc "name" ], P.limit 10 ]
+            |> toCmd PeopleLoaded
         , Person.delete personID
-            |> P.toCmd jwt PersonDeleted
+            |> toCmd PersonDeleted
         ]
 
 
@@ -237,6 +289,8 @@ Here's how you could use it:
 @docs offset
 @docs ilike
 @docs like
+@docs contains
+@docs containedIn
 
 
 ## Values
@@ -530,6 +584,30 @@ gte =
 inList : (a -> Value) -> List a -> Operator
 inList toValue l =
     In <| List <| List.map toValue l
+
+
+{-| Use the `cs` operator.
+
+    param "tag" <| contains <| List.map string [ "Chico", "Harpo", "Groucho" ]
+
+    -- tag=cs.(\"Chico\",\"Harpo\",\"Groucho\")"
+
+-}
+contains : List Value -> Operator
+contains l =
+    Cs l
+
+
+{-| Use the `cd` operator.
+
+    param "tag" <| containedIn <| List.map string [ "Chico", "Harpo", "Groucho" ]
+
+    -- tag=cd.(\"Chico\",\"Harpo\",\"Groucho\")"
+
+-}
+containedIn : List Value -> Operator
+containedIn l =
+    Cd l
 
 
 {-| When you don't want to use a specific type after the equals sign in the query, you

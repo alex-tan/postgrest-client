@@ -14,6 +14,17 @@ import Json.Decode exposing (..)
 import Json.Encode as JE
 import Postgrest.Client as P
 
+-- Optional, but recommended to have a type that
+-- represents your primary key.
+type PersonID
+    = PersonID Int
+
+
+-- And a way to unwrap it...
+personID : PersonID -> Int
+personID (PersonID id) =
+    id
+
 
 -- Define the record you would fetch back from the server.
 type alias Person =
@@ -42,18 +53,6 @@ encode person =
     JE.object
         [ ( "name", JE.string person.name )
         ]
-
-
--- Optional, but recommended to have a type that
--- represents your primary key.
-type PersonID
-    = PersonID Int
-
-
--- And a way to unwrap it...
-personID : PersonID -> Int
-personID (PersonID id) =
-    id
 
 
 -- Tell Postgrest.Client the column name of your primary key and

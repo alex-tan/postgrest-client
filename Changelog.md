@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2
+
+- Add support for `cs` and `cd` operators.
+
 ## 2.0.1
 
 - Change ilike and like parameters to not be quoted. (Otherwise it wouldn't work with 5.2.0) Previously it would look like `ilike."value*"` but now it's `ilike.value*`.
