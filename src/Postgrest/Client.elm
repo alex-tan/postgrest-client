@@ -78,8 +78,8 @@ module Postgrest.Client exposing
 
 # postgrest-client
 
-This library allows you to construct and execute requests in a typesafe manner, with
-little boilerplate. Here's what `Api.People` might look like:
+This library allows you to construct and execute postgrest requests with additional type safety.
+Here's what `Api.People` might look like:
 
     import Json.Decode exposing (..)
     import Json.Encode as JE
@@ -128,7 +128,8 @@ little boilerplate. Here's what `Api.People` might look like:
         P.primaryKey ( "id", P.int << personID )
 
     -- Tell Postgrest.Client the URL of the postgrest endpoint and how
-    -- to decode records from it.
+    -- to decode an individual record from it. Postgrest will combine
+    -- the decoder with a list decoder automatically when necessary.
     endpoint : P.Endpoint Person
     endpoint =
         P.endpoint "/people" decodeUnit
@@ -139,7 +140,7 @@ little boilerplate. Here's what `Api.People` might look like:
         P.getMany endpoint
 
     -- Delete by primary key. This is a convenience function that reduces
-    -- the likelihood that you delete the wrong records by specifying incorrect
+    -- the likelihood that you delete more than one record by specifying incorrect
     -- parameters.
     delete : PersonID -> P.Request PersonID
     delete =
@@ -157,7 +158,7 @@ Here's how you could use it:
 
     jwt : P.JWT
     jwt =
-        P.jwt "myjwt"
+        P.jwt "abcdefghijklmnopqrstuvwxyz1234"
 
     type Msg
         = PersonCreated (Result P.Error Person)
@@ -255,7 +256,7 @@ Here's how you could use it:
 @docs resourceWithParams
 
 
-## Converting/combining into something usable
+## Converting/Combining Parameters
 
 @docs combineParams
 @docs concatParams
@@ -400,7 +401,7 @@ param =
     Param
 
 
-{-| A constructor for the limit parameter.
+{-| Limit the number of records that can be returned.
 
     limit 10
 
@@ -410,7 +411,10 @@ limit =
     Limit
 
 
-{-| Offset
+{-| Specify the offset in the query.
+
+    offset 10
+
 -}
 offset : Int -> Param
 offset =
@@ -462,6 +466,9 @@ nullslast o =
 
 
 {-| Used in combination with `order` to sort results ascending.
+
+    P.order [ P.asc "name" ]
+
 -}
 asc : String -> ColumnOrder
 asc s =
@@ -469,6 +476,9 @@ asc s =
 
 
 {-| Used in combination with `order` to sort results descending.
+
+    P.order [ P.desc "name" ]
+
 -}
 desc : String -> ColumnOrder
 desc s =
@@ -495,7 +505,7 @@ ilike =
     Ilike
 
 
-{-| When a value needs to be null
+{-| Query, specifying that a value should be null.
 
     param "age" <| null
 
@@ -1085,7 +1095,7 @@ postOne e body =
     defaultRequest e <| Post body <| index 0 <| Endpoint.decoder e
 
 
-{-| toCmd takes a JWT, Msg and a Request and turns it into a Cmd.
+{-| Takes a JWT, Msg and a Request and turns it into a Cmd.
 -}
 toCmd : JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
 toCmd jwt_ toMsg (Request options) =
@@ -1112,7 +1122,7 @@ toCmd jwt_ toMsg (Request options) =
         }
 
 
-{-| toTask takes a JWT and a Request and turns it into a Task.
+{-| Takes a JWT and a Request and turns it into a Task.
 -}
 toTask : JWT -> Request a -> Task Error a
 toTask jwt_ (Request o) =
@@ -1357,7 +1367,7 @@ emptyErrors =
 
 
 {-| `Error` Looks a lot like `Http.Error` except `BadStatus` includes a second argument,
-`PostgrestErrorJSON` with any details htat postgrest might have given us about a failed request.
+`PostgrestErrorJSON` with any details that postgrest might have given us about a failed request.
 -}
 type Error
     = Timeout
