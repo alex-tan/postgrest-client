@@ -66,7 +66,21 @@ requestTypeToHeaders jwt_ r =
             [ jwtHeader jwt_ ]
 
         Delete _ ->
-            [ jwtHeader jwt_ ]
+            [ jwtHeader jwt_
+
+            -- Even though we don't need the record to be returned, this is a
+            -- temporary workaround for when defaultSelect is specified, because
+            -- if a select is specified without "Prefer" "return=representation"
+            -- postgrest will give us an error that looks like this:
+            --
+            -- {
+            --     "hint": null,
+            --     "details": null,
+            --     "code": "42703",
+            --     "message": "column pg_source.id does not exist"
+            -- }
+            , returnRepresentationHeader
+            ]
 
 
 requestTypeToBody : RequestType r -> Http.Body
