@@ -113,7 +113,7 @@ cmdExamples =
         }
         |> P.toCmd jwt PersonCreated
     , People.getMany
-        [ P.order [ P.asc "name" ], P.limit 10 ]
+        |> P.setParams [ P.order [ P.asc "name" ], P.limit 10 ]
         |> toCmd PeopleLoaded
     , Person.delete personID
         |> toCmd PersonDeleted
