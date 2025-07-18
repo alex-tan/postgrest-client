@@ -1097,11 +1097,11 @@ postOne e body =
 
 {-| Takes a JWT, Msg and a Request and turns it into a Cmd.
 -}
-toCmd : JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
-toCmd jwt_ toMsg (Request options) =
+toCmd : Maybe JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
+toCmd maybeJwt toMsg (Request options) =
     Http.request
         { method = requestTypeToHTTPMethod options.options
-        , headers = requestTypeToHeaders jwt_ options.options
+        , headers = requestTypeToHeaders maybeJwt options.options
         , url = fullURL options
         , body = requestTypeToBody options.options
         , timeout = options.timeout
@@ -1124,8 +1124,8 @@ toCmd jwt_ toMsg (Request options) =
 
 {-| Takes a JWT and a Request and turns it into a Task.
 -}
-toTask : JWT -> Request a -> Task Error a
-toTask jwt_ (Request o) =
+toTask : Maybe JWT -> Request a -> Task Error a
+toTask maybeJwt (Request o) =
     let
         { options } =
             o
@@ -1135,7 +1135,7 @@ toTask jwt_ (Request o) =
         , timeout = o.timeout
         , url = fullURL o
         , method = requestTypeToHTTPMethod options
-        , headers = requestTypeToHeaders jwt_ options
+        , headers = requestTypeToHeaders maybeJwt options
         , resolver =
             case options of
                 Delete returning ->

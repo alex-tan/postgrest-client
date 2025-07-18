@@ -53,34 +53,38 @@ defaultRequest e requestType =
         }
 
 
-requestTypeToHeaders : JWT -> RequestType r -> List Http.Header
-requestTypeToHeaders jwt_ r =
-    case r of
-        Post _ _ ->
-            [ jwtHeader jwt_, returnRepresentationHeader ]
+requestTypeToHeaders : Maybe JWT -> RequestType r -> List Http.Header
+requestTypeToHeaders maybeJwt r =
+    let
+        headers = 
+            case r of
+                Post _ _ ->
+                    [ jwtHeader maybeJwt, Just returnRepresentationHeader ]
 
-        Patch _ _ ->
-            [ jwtHeader jwt_, returnRepresentationHeader ]
+                Patch _ _ ->
+                    [ jwtHeader maybeJwt, Just returnRepresentationHeader ]
 
-        Get _ ->
-            [ jwtHeader jwt_ ]
+                Get _ ->
+                    [ jwtHeader maybeJwt ]
 
-        Delete _ ->
-            [ jwtHeader jwt_
+                Delete _ ->
+                    [ jwtHeader maybeJwt
 
-            -- Even though we don't need the record to be returned, this is a
-            -- temporary workaround for when defaultSelect is specified, because
-            -- if a select is specified without "Prefer" "return=representation"
-            -- postgrest will give us an error that looks like this:
-            --
-            -- {
-            --     "hint": null,
-            --     "details": null,
-            --     "code": "42703",
-            --     "message": "column pg_source.id does not exist"
-            -- }
-            , returnRepresentationHeader
-            ]
+                    -- Even though we don't need the record to be returned, this is a
+                    -- temporary workaround for when defaultSelect is specified, because
+                    -- if a select is specified without "Prefer" "return=representation"
+                    -- postgrest will give us an error that looks like this:
+                    --
+                    -- {
+                    --     "hint": null,
+                    --     "details": null,
+                    --     "code": "42703",
+                    --     "message": "column pg_source.id does not exist"
+                    -- }
+                    , Just returnRepresentationHeader
+                    ]
+    in
+    List.filterMap identity headers
 
 
 requestTypeToBody : RequestType r -> Http.Body
