@@ -7,6 +7,7 @@ module Postgrest.Internal.Requests exposing
     , requestTypeToBody
     , requestTypeToHTTPMethod
     , requestTypeToHeaders
+    , setCustomHeaders
     , setMandatoryParams
     , setTimeout
     )
@@ -31,6 +32,7 @@ type alias RequestOptions r =
     , overrideParams : Params
     , mandatoryParams : Params
     , baseURL : BaseURL
+    , customHeaders : List Http.Header
     }
 
 
@@ -50,25 +52,26 @@ defaultRequest e requestType =
         , overrideParams = []
         , mandatoryParams = []
         , baseURL = Endpoint.url e
+        , customHeaders = []
         }
 
 
-requestTypeToHeaders : Maybe JWT -> RequestType r -> List Http.Header
-requestTypeToHeaders maybeJwt r =
+requestTypeToHeaders : Maybe JWT -> RequestType r -> List Http.Header -> List Http.Header
+requestTypeToHeaders jwt_ r customHeaders =
     let
-        headers = 
+        defaultHeaders =
             case r of
                 Post _ _ ->
-                    [ jwtHeader maybeJwt, Just returnRepresentationHeader ]
+                    [ jwtHeader jwt_, Just returnRepresentationHeader ]
 
                 Patch _ _ ->
-                    [ jwtHeader maybeJwt, Just returnRepresentationHeader ]
+                    [ jwtHeader jwt_, Just returnRepresentationHeader ]
 
                 Get _ ->
-                    [ jwtHeader maybeJwt ]
+                    [ jwtHeader jwt_ ]
 
                 Delete _ ->
-                    [ jwtHeader maybeJwt
+                    [ jwtHeader jwt_
 
                     -- Even though we don't need the record to be returned, this is a
                     -- temporary workaround for when defaultSelect is specified, because
@@ -84,7 +87,7 @@ requestTypeToHeaders maybeJwt r =
                     , Just returnRepresentationHeader
                     ]
     in
-    List.filterMap identity headers
+    List.filterMap identity defaultHeaders ++ customHeaders
 
 
 requestTypeToBody : RequestType r -> Http.Body
@@ -148,3 +151,8 @@ fullURL { defaultParams, overrideParams, mandatoryParams, baseURL } =
 setTimeout : Float -> Request a -> Request a
 setTimeout t =
     mapRequest (\req -> { req | timeout = Just t })
+
+
+setCustomHeaders : List Http.Header -> Request a -> Request a
+setCustomHeaders headers =
+    mapRequest (\req -> { req | customHeaders = headers })

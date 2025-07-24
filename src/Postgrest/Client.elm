@@ -71,6 +71,7 @@ module Postgrest.Client exposing
     , plfts
     , phfts
     , fts
+    , setCustomHeaders
     )
 
 {-|
@@ -334,6 +335,7 @@ import Postgrest.Internal.Requests as Request
         , requestTypeToBody
         , requestTypeToHTTPMethod
         , requestTypeToHeaders
+        , setCustomHeaders
         , setMandatoryParams
         )
 import Postgrest.Internal.URL exposing (BaseURL(..))
@@ -794,6 +796,30 @@ setParams p =
     mapRequest (\req -> { req | overrideParams = p })
 
 
+{-| Set custom headers for the request.
+
+    getThings : String -> (Result P.Error (List Thing) -> msg) -> Cmd msg
+    getThings jwt toMsg =
+        let
+            customHeaders =
+                -- Some custom header we want to pass so that we can pull it from the request in PostgREST.
+                -- For example a tenant identifier in a multi-tenant system. You could just encode this into the JWT,
+                -- however you might run into a case where you can't provide a JWT, like for anonymous third party use
+                -- of your API.
+                [ Http.header "X-Tenant-ID" "12345" ]
+
+            request =
+                P.getMany someThingEndpoint
+                    |> P.setCustomHeaders customHeaders
+        in
+        P.toCmd (Just (P.jwt jwt)) toMsg request
+
+-}
+setCustomHeaders : List Http.Header -> Request a -> Request a
+setCustomHeaders =
+    Request.setCustomHeaders
+
+
 {-| Takes Params and returns the parameters as a list of (Key, Value) strings.
 -}
 normalizeParams : Params -> List ( String, String )
@@ -909,6 +935,7 @@ get baseURL { params, decoder } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL baseURL
+        , customHeaders = []
         }
 
 
@@ -930,6 +957,7 @@ post baseURL { params, decoder, body } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL baseURL
+        , customHeaders = []
         }
 
 
@@ -953,6 +981,7 @@ unsafePatch baseURL { body, decoder, params } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL baseURL
+        , customHeaders = []
         }
 
 
@@ -975,6 +1004,7 @@ unsafeDelete url { returning, params } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL url
+        , customHeaders = []
         }
 
 
@@ -1098,10 +1128,10 @@ postOne e body =
 {-| Takes a JWT, Msg and a Request and turns it into a Cmd.
 -}
 toCmd : Maybe JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
-toCmd maybeJwt toMsg (Request options) =
+toCmd jwt_ toMsg (Request options) =
     Http.request
         { method = requestTypeToHTTPMethod options.options
-        , headers = requestTypeToHeaders maybeJwt options.options
+        , headers = requestTypeToHeaders jwt_ options.options options.customHeaders
         , url = fullURL options
         , body = requestTypeToBody options.options
         , timeout = options.timeout
@@ -1125,7 +1155,7 @@ toCmd maybeJwt toMsg (Request options) =
 {-| Takes a JWT and a Request and turns it into a Task.
 -}
 toTask : Maybe JWT -> Request a -> Task Error a
-toTask maybeJwt (Request o) =
+toTask jwt_ (Request o) =
     let
         { options } =
             o
@@ -1135,7 +1165,7 @@ toTask maybeJwt (Request o) =
         , timeout = o.timeout
         , url = fullURL o
         , method = requestTypeToHTTPMethod options
-        , headers = requestTypeToHeaders maybeJwt options
+        , headers = requestTypeToHeaders jwt_ options o.customHeaders
         , resolver =
             case options of
                 Delete returning ->
