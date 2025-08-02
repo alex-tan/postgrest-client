@@ -105,7 +105,7 @@ type Msg
     | PersonDeleted (Result P.Error PersonID)
 
 toCmd = 
-    P.toCmd jwt
+    P.toCmd (Just jwt)
 
 cmdExamples =
     [ People.post
