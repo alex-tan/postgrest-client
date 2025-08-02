@@ -202,9 +202,9 @@ Here's how you could use it:
 
 # Request Options
 
+@docs setCustomHeaders
 @docs setParams
 @docs setTimeout
-
 
 # Generic Requests
 
