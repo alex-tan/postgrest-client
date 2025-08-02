@@ -23,6 +23,6 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Run elm-format
-        run: npx elm-format
+        run: bin/elm-format
       - name: Run elm tests
-        run: npx elm-test
+        run: bin/elm-test
