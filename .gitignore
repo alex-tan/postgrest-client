@@ -2,3 +2,4 @@ elm-stuff/
 .DS_Store
 docs.json
 .idea/
+node_modules/
