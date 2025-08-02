@@ -9,6 +9,7 @@ module Postgrest.Client exposing
     , getByPrimaryKey
     , patchByPrimaryKey
     , deleteByPrimaryKey
+    , setCustomHeaders
     , setParams
     , setTimeout
     , get
@@ -71,7 +72,6 @@ module Postgrest.Client exposing
     , plfts
     , phfts
     , fts
-    , setCustomHeaders
     )
 
 {-|
@@ -205,6 +205,7 @@ Here's how you could use it:
 @docs setCustomHeaders
 @docs setParams
 @docs setTimeout
+
 
 # Generic Requests
 
