@@ -7,6 +7,7 @@ module Postgrest.Internal.Requests exposing
     , requestTypeToBody
     , requestTypeToHTTPMethod
     , requestTypeToHeaders
+    , setCustomHeaders
     , setMandatoryParams
     , setTimeout
     )
@@ -31,6 +32,7 @@ type alias RequestOptions r =
     , overrideParams : Params
     , mandatoryParams : Params
     , baseURL : BaseURL
+    , customHeaders : List Http.Header
     }
 
 
@@ -50,37 +52,42 @@ defaultRequest e requestType =
         , overrideParams = []
         , mandatoryParams = []
         , baseURL = Endpoint.url e
+        , customHeaders = []
         }
 
 
-requestTypeToHeaders : JWT -> RequestType r -> List Http.Header
-requestTypeToHeaders jwt_ r =
-    case r of
-        Post _ _ ->
-            [ jwtHeader jwt_, returnRepresentationHeader ]
+requestTypeToHeaders : Maybe JWT -> RequestType r -> List Http.Header -> List Http.Header
+requestTypeToHeaders jwt_ r customHeaders =
+    let
+        defaultHeaders =
+            case r of
+                Post _ _ ->
+                    [ jwtHeader jwt_, Just returnRepresentationHeader ]
 
-        Patch _ _ ->
-            [ jwtHeader jwt_, returnRepresentationHeader ]
+                Patch _ _ ->
+                    [ jwtHeader jwt_, Just returnRepresentationHeader ]
 
-        Get _ ->
-            [ jwtHeader jwt_ ]
+                Get _ ->
+                    [ jwtHeader jwt_ ]
 
-        Delete _ ->
-            [ jwtHeader jwt_
+                Delete _ ->
+                    [ jwtHeader jwt_
 
-            -- Even though we don't need the record to be returned, this is a
-            -- temporary workaround for when defaultSelect is specified, because
-            -- if a select is specified without "Prefer" "return=representation"
-            -- postgrest will give us an error that looks like this:
-            --
-            -- {
-            --     "hint": null,
-            --     "details": null,
-            --     "code": "42703",
-            --     "message": "column pg_source.id does not exist"
-            -- }
-            , returnRepresentationHeader
-            ]
+                    -- Even though we don't need the record to be returned, this is a
+                    -- temporary workaround for when defaultSelect is specified, because
+                    -- if a select is specified without "Prefer" "return=representation"
+                    -- postgrest will give us an error that looks like this:
+                    --
+                    -- {
+                    --     "hint": null,
+                    --     "details": null,
+                    --     "code": "42703",
+                    --     "message": "column pg_source.id does not exist"
+                    -- }
+                    , Just returnRepresentationHeader
+                    ]
+    in
+    List.filterMap identity defaultHeaders ++ customHeaders
 
 
 requestTypeToBody : RequestType r -> Http.Body
@@ -144,3 +151,8 @@ fullURL { defaultParams, overrideParams, mandatoryParams, baseURL } =
 setTimeout : Float -> Request a -> Request a
 setTimeout t =
     mapRequest (\req -> { req | timeout = Just t })
+
+
+setCustomHeaders : List Http.Header -> Request a -> Request a
+setCustomHeaders headers =
+    mapRequest (\req -> { req | customHeaders = headers })

@@ -17,6 +17,6 @@ jwtString (JWT s) =
     s
 
 
-jwtHeader : JWT -> Http.Header
-jwtHeader (JWT jwt_) =
-    Http.header "Authorization" <| "Bearer " ++ jwt_
+jwtHeader : Maybe JWT -> Maybe Http.Header
+jwtHeader =
+    Maybe.map (\(JWT jwt_) -> Http.header "Authorization" <| "Bearer " ++ jwt_)
