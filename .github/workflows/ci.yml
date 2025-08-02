@@ -15,12 +15,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Install dependencies
         run: npm install
+      - name: Run elm-format
+        run: bin/elm-format
       - name: Run elm tests
-        run: npx elm-test
+        run: bin/elm-test
