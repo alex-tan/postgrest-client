@@ -3,7 +3,7 @@
     "name": "alex-tan/postgrest-client",
     "summary": "A postgrest client written in elm",
     "license": "MIT",
-    "version": "2.1.0",
+    "version": "3.0.0",
     "exposed-modules": [
         "Postgrest.Client"
     ],
@@ -15,6 +15,6 @@
         "elm/url": "1.0.0 <= v < 2.0.0"
     },
     "test-dependencies": {
-        "elm-explorations/test": "1.2.0 <= v < 2.0.0"
+        "elm-explorations/test": "2.2.0 <= v < 3.0.0"
     }
 }

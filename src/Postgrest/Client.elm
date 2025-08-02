@@ -72,6 +72,7 @@ module Postgrest.Client exposing
     , phfts
     , fts
     , array
+    , setCustomHeaders
     )
 
 {-|
@@ -79,8 +80,8 @@ module Postgrest.Client exposing
 
 # postgrest-client
 
-This library allows you to construct and execute requests in a typesafe manner, with
-little boilerplate. Here's what `Api.People` might look like:
+This library allows you to construct and execute postgrest requests with additional type safety.
+Here's what `Api.People` might look like:
 
     import Json.Decode exposing (..)
     import Json.Encode as JE
@@ -129,7 +130,8 @@ little boilerplate. Here's what `Api.People` might look like:
         P.primaryKey ( "id", P.int << personID )
 
     -- Tell Postgrest.Client the URL of the postgrest endpoint and how
-    -- to decode records from it.
+    -- to decode an individual record from it. Postgrest will combine
+    -- the decoder with a list decoder automatically when necessary.
     endpoint : P.Endpoint Person
     endpoint =
         P.endpoint "/people" decodeUnit
@@ -140,7 +142,7 @@ little boilerplate. Here's what `Api.People` might look like:
         P.getMany endpoint
 
     -- Delete by primary key. This is a convenience function that reduces
-    -- the likelihood that you delete the wrong records by specifying incorrect
+    -- the likelihood that you delete more than one record by specifying incorrect
     -- parameters.
     delete : PersonID -> P.Request PersonID
     delete =
@@ -158,7 +160,7 @@ Here's how you could use it:
 
     jwt : P.JWT
     jwt =
-        P.jwt "myjwt"
+        P.jwt "abcdefghijklmnopqrstuvwxyz1234"
 
     type Msg
         = PersonCreated (Result P.Error Person)
@@ -201,9 +203,9 @@ Here's how you could use it:
 
 # Request Options
 
+@docs setCustomHeaders
 @docs setParams
 @docs setTimeout
-
 
 # Generic Requests
 
@@ -256,7 +258,7 @@ Here's how you could use it:
 @docs resourceWithParams
 
 
-## Converting/combining into something usable
+## Converting/Combining Parameters
 
 @docs combineParams
 @docs concatParams
@@ -334,6 +336,7 @@ import Postgrest.Internal.Requests as Request
         , requestTypeToBody
         , requestTypeToHTTPMethod
         , requestTypeToHeaders
+        , setCustomHeaders
         , setMandatoryParams
         )
 import Postgrest.Internal.URL exposing (BaseURL(..))
@@ -401,7 +404,7 @@ param =
     Param
 
 
-{-| A constructor for the limit parameter.
+{-| Limit the number of records that can be returned.
 
     limit 10
 
@@ -411,7 +414,10 @@ limit =
     Limit
 
 
-{-| Offset
+{-| Specify the offset in the query.
+
+    offset 10
+
 -}
 offset : Int -> Param
 offset =
@@ -463,6 +469,9 @@ nullslast o =
 
 
 {-| Used in combination with `order` to sort results ascending.
+
+    P.order [ P.asc "name" ]
+
 -}
 asc : String -> ColumnOrder
 asc s =
@@ -470,6 +479,9 @@ asc s =
 
 
 {-| Used in combination with `order` to sort results descending.
+
+    P.order [ P.desc "name" ]
+
 -}
 desc : String -> ColumnOrder
 desc s =
@@ -496,7 +508,7 @@ ilike =
     Ilike
 
 
-{-| When a value needs to be null
+{-| Query, specifying that a value should be null.
 
     param "age" <| null
 
@@ -792,6 +804,30 @@ setParams p =
     mapRequest (\req -> { req | overrideParams = p })
 
 
+{-| Set custom headers for the request.
+
+    getThings : String -> (Result P.Error (List Thing) -> msg) -> Cmd msg
+    getThings jwt toMsg =
+        let
+            customHeaders =
+                -- Some custom header we want to pass so that we can pull it from the request in PostgREST.
+                -- For example a tenant identifier in a multi-tenant system. You could just encode this into the JWT,
+                -- however you might run into a case where you can't provide a JWT, like for anonymous third party use
+                -- of your API.
+                [ Http.header "X-Tenant-ID" "12345" ]
+
+            request =
+                P.getMany someThingEndpoint
+                    |> P.setCustomHeaders customHeaders
+        in
+        P.toCmd (Just (P.jwt jwt)) toMsg request
+
+-}
+setCustomHeaders : List Http.Header -> Request a -> Request a
+setCustomHeaders =
+    Request.setCustomHeaders
+
+
 {-| Takes Params and returns the parameters as a list of (Key, Value) strings.
 -}
 normalizeParams : Params -> List ( String, String )
@@ -907,6 +943,7 @@ get baseURL { params, decoder } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL baseURL
+        , customHeaders = []
         }
 
 
@@ -928,6 +965,7 @@ post baseURL { params, decoder, body } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL baseURL
+        , customHeaders = []
         }
 
 
@@ -951,6 +989,7 @@ unsafePatch baseURL { body, decoder, params } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL baseURL
+        , customHeaders = []
         }
 
 
@@ -973,6 +1012,7 @@ unsafeDelete url { returning, params } =
         , overrideParams = params
         , mandatoryParams = []
         , baseURL = BaseURL url
+        , customHeaders = []
         }
 
 
@@ -1093,13 +1133,13 @@ postOne e body =
     defaultRequest e <| Post body <| index 0 <| Endpoint.decoder e
 
 
-{-| toCmd takes a JWT, Msg and a Request and turns it into a Cmd.
+{-| Takes a JWT, Msg and a Request and turns it into a Cmd.
 -}
-toCmd : JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
+toCmd : Maybe JWT -> (Result Error a -> msg) -> Request a -> Cmd msg
 toCmd jwt_ toMsg (Request options) =
     Http.request
         { method = requestTypeToHTTPMethod options.options
-        , headers = requestTypeToHeaders jwt_ options.options
+        , headers = requestTypeToHeaders jwt_ options.options options.customHeaders
         , url = fullURL options
         , body = requestTypeToBody options.options
         , timeout = options.timeout
@@ -1120,9 +1160,9 @@ toCmd jwt_ toMsg (Request options) =
         }
 
 
-{-| toTask takes a JWT and a Request and turns it into a Task.
+{-| Takes a JWT and a Request and turns it into a Task.
 -}
-toTask : JWT -> Request a -> Task Error a
+toTask : Maybe JWT -> Request a -> Task Error a
 toTask jwt_ (Request o) =
     let
         { options } =
@@ -1133,7 +1173,7 @@ toTask jwt_ (Request o) =
         , timeout = o.timeout
         , url = fullURL o
         , method = requestTypeToHTTPMethod options
-        , headers = requestTypeToHeaders jwt_ options
+        , headers = requestTypeToHeaders jwt_ options o.customHeaders
         , resolver =
             case options of
                 Delete returning ->
@@ -1365,7 +1405,7 @@ emptyErrors =
 
 
 {-| `Error` Looks a lot like `Http.Error` except `BadStatus` includes a second argument,
-`PostgrestErrorJSON` with any details htat postgrest might have given us about a failed request.
+`PostgrestErrorJSON` with any details that postgrest might have given us about a failed request.
 -}
 type Error
     = Timeout
