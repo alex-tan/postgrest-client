@@ -3,7 +3,7 @@
     "name": "alex-tan/postgrest-client",
     "summary": "A postgrest client written in elm",
     "license": "MIT",
-    "version": "2.1.1",
+    "version": "3.0.0",
     "exposed-modules": [
         "Postgrest.Client"
     ],
