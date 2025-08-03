@@ -72,6 +72,7 @@ module Postgrest.Client exposing
     , plfts
     , phfts
     , fts
+    , array
     )
 
 {-|
@@ -752,8 +753,15 @@ resourceWithParams =
 `inList`.
 -}
 list : List Value -> Value
-list values =
-    List values
+list =
+    List
+
+
+{-| Represent an array.
+-}
+array : List Value -> Value
+array =
+    Array
 
 
 {-| Shorthand for attributes, when you don't need to specify nested resources:

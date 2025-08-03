@@ -82,6 +82,7 @@ type Value
     = String String
     | Int Int
     | List (List Value)
+    | Array (List Value)
 
 
 type alias Language =
@@ -339,6 +340,9 @@ stringifyValue quotes val =
             l
                 |> List.map (stringifyValue quotes)
                 |> String.join ","
+
+        Array l ->
+            curlyBraceList l
 
 
 stringifySelect : Selectable -> String

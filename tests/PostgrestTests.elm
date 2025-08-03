@@ -122,6 +122,8 @@ matching =
     , ( "foo=is.null", [ P.param "foo" P.null ] )
     , ( "tag=cs.{foo,bar}", [ P.param "tag" <| P.contains <| List.map P.string [ "foo", "bar" ] ] )
     , ( "tag=cd.{foo,bar}", [ P.param "tag" <| P.containedIn <| List.map P.string [ "foo", "bar" ] ] )
+    , ( "tag=eq.{}", [ P.param "tag" <| P.eq <| P.array [] ] )
+    , ( "tag=eq.{test}", [ P.param "tag" <| P.eq <| P.array [ P.string "test" ] ] )
     ]
 
 
